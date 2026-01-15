@@ -61,14 +61,38 @@ captains-log/
 - Environment variable overrides (`CAPTAINS_LOG_*`)
 - Paths: `~/Library/Application Support/CaptainsLog/`
 
+### Screenshot Capture (Phase 2)
+
+**Implementation**: Uses CoreGraphics `CGDisplayCreateImage` (not ScreenCaptureKit) for simpler synchronous capture.
+
+**Files**:
+- `trackers/screenshot_capture.py` - Capture with WebP compression
+- `storage/screenshot_manager.py` - DB persistence and retention
+- `web/routes/screenshots.py` - API endpoints
+
+**Key Features**:
+- **Periodic capture**: Every 5 minutes (configurable)
+- **App-change capture**: Screenshot on every app switch (after debounce)
+- **Debounce**: 2 seconds - waits for user to settle before recording (filters swipe gestures)
+- **Privacy filtering**: Excludes password managers, banking apps
+- **WebP compression**: ~80KB per screenshot, max 1280px width
+- **Retention**: 7 days, auto-cleanup hourly
+- **UTC timestamps**: All timestamps in UTC for consistency with activity logs
+
+**Dashboard Integration**:
+- Timeline shows thumbnails matched to activities (within 60 seconds)
+- Click thumbnail to view full-size screenshot
+- Screenshot count shown in timeline header
+
 ## Important Patterns
 
 ### Activity Event Flow
 ```
-App Change Event → Debounce (500ms) → Enrich with:
+App Change Event → Debounce (2000ms) → Enrich with:
   - Window title (Accessibility)
   - URL (browser title parsing)
   - Idle state (CGEventSource)
+  - Screenshot capture (if enabled)
 → Buffer (in-memory) → Flush every 30s → SQLite
 ```
 
@@ -136,7 +160,7 @@ CREATE TABLE summaries (
 ## Phase Implementation Status
 
 - [x] **Phase 1**: Core Daemon - Activity tracking, CLI, Web Dashboard
-- [ ] **Phase 2**: Screenshot Capture - ScreenCaptureKit, WebP compression
+- [x] **Phase 2**: Screenshot Capture - CoreGraphics, WebP compression, app-change triggers
 - [ ] **Phase 3**: AI Summaries - Claude Haiku, Batch API
 - [ ] **Phase 4**: Aggregation - Daily/weekly summaries
 - [ ] **Phase 5**: Cloud Sync - Encrypted S3/R2
@@ -162,6 +186,47 @@ make test
 - `fastapi` + `jinja2`: Web dashboard
 - `anthropic`: Claude API (Phase 3)
 
+## Known Issues & Deviations from Plan
+
+### NSWorkspace Notifications in Background Contexts (RESOLVED)
+
+**Status**: RESOLVED with polling fallback
+
+**Problem**: NSWorkspace notifications are not delivered when running in background contexts (launchd, subprocess, etc.) because they require an active connection to WindowServer.
+
+**Solution Implemented**:
+- Added **polling fallback** that activates automatically after 10 seconds if no NSWorkspace events are received
+- Polling checks the frontmost application every 2 seconds
+- Event-based tracking still works when running from Terminal.app
+- Polling fallback provides equivalent functionality with minimal CPU overhead
+
+**How It Works**:
+```
+1. Daemon starts and registers for NSWorkspace notifications
+2. After 10 seconds, if no events received, polling fallback enables
+3. Polling checks every 2 seconds for app changes
+4. Events flow through same pipeline: monitor → buffer → database
+```
+
+**Result**: The daemon now captures activity correctly regardless of how it's started.
+
+### Missing Dependency Issue (RESOLVED)
+
+**Problem**: `pyobjc-framework-ApplicationServices` was not in dependencies.
+
+**Fix**: Added to pyproject.toml:
+```toml
+"pyobjc-framework-ApplicationServices>=10.0",
+```
+
+### Permission Display Name Issue
+
+**Problem**: macOS shows "Python 3" instead of "Captain's Log" in permission dialogs.
+
+**Cause**: Running as Python script, not bundled app.
+
+**Status**: Cosmetic issue only. Permissions work correctly.
+
 ## Common Issues
 
 ### Permission Denied Errors
@@ -176,6 +241,12 @@ make test
 - WAL mode handles concurrent access
 - Busy timeout set to 5000ms
 
+### Daemon Won't Track Activity
+- Check that Terminal.app has Accessibility permission granted
+- Verify daemon is running: `captains-log status`
+- Polling fallback enables after 10 seconds if event-based tracking fails
+- Run in foreground for debugging: `captains-log start -f`
+
 ## Testing the Application
 
 ```bash
@@ -183,13 +254,147 @@ make test
 make install
 source .venv/bin/activate
 
-# Test daemon
-captains-log start -f  # Foreground mode
+# Test daemon (background mode)
+captains-log start         # Background daemon
+captains-log status        # Check status
+captains-log logs -f       # Follow logs
 
-# Test dashboard (new terminal)
-captains-log dashboard
-# Open http://127.0.0.1:8080
+# Test daemon (foreground mode for debugging)
+captains-log start -f      # Foreground mode (Ctrl+C to stop)
+
+# Test dashboard
+captains-log dashboard --port 8081   # Start on port 8081
+# Open http://127.0.0.1:8081
 
 # Check health
 captains-log health
 ```
+
+## Method of Operation for Development
+
+When developing or debugging Captain's Log:
+
+### 1. Recursive Testing Workflow
+- Test changes by running commands and verifying output
+- If testing UI changes, use `open http://127.0.0.1:8081/` to open in browser
+- Check logs with `captains-log logs -f` for debugging
+- Query database directly: `sqlite3 ~/Library/Application\ Support/CaptainsLog/captains_log.db`
+
+### 2. Common Development Commands
+```bash
+# Check daemon status
+ps aux | grep captains-log | grep -v grep
+
+# View recent activity
+sqlite3 ~/Library/Application\ Support/CaptainsLog/captains_log.db \
+  "SELECT datetime(timestamp), app_name FROM activity_logs ORDER BY timestamp DESC LIMIT 10;"
+
+# Restart daemon
+captains-log stop && captains-log start
+
+# Check SwiftBar output
+bash "/Users/kishore/Library/Application Support/SwiftBar/Plugins/captains-log.1m.sh"
+```
+
+### 3. Dashboard URLs
+- Main Dashboard: http://127.0.0.1:8081/
+- Time Analysis: http://127.0.0.1:8081/time-analysis
+- Timeline: http://127.0.0.1:8081/timeline
+- Apps: http://127.0.0.1:8081/apps
+
+---
+
+## Recurring Instructions for Claude
+
+**IMPORTANT**: Follow these instructions in every session working on this project.
+
+### 1. Before Starting Work
+- Read the plan file at `~/.claude/plans/zippy-crunching-hickey.md` for current implementation status
+- Check the Phase Implementation Status above to understand what's complete
+
+### 2. After Completing Work
+- Update this CLAUDE.md file with any significant changes or new patterns
+- Update the plan file with implementation progress
+- Commit changes with clear commit messages
+- **Push to git**: Always push changes to remote after committing
+
+### 3. Key Design Principles
+- **UTC timestamps everywhere**: All timestamps in database should be UTC for consistency
+- **Debounce user interactions**: Wait 2+ seconds before recording app switches to filter swipe gestures
+- **Graceful degradation**: Features should fail gracefully if permissions are denied
+- **Local-first**: Raw data stays local, only summaries sync to cloud
+
+### 4. Testing Changes
+```bash
+# Restart daemon to apply changes
+.venv/bin/python -m captains_log stop && .venv/bin/python -m captains_log start
+
+# Restart dashboard
+pkill -f "uvicorn.*captains_log"; .venv/bin/python -m captains_log dashboard &
+
+# Check logs
+tail -f ~/Library/Logs/CaptainsLog/daemon.log
+
+# Query database
+sqlite3 ~/Library/Application\ Support/CaptainsLog/captains_log.db
+```
+
+### 5. Session Summary Template
+At the end of each session, update this file with:
+- What was implemented/changed
+- Any new files created
+- Configuration changes
+- Known issues or TODOs
+
+---
+
+## Session Log
+
+### 2026-01-15: Phase 2 Screenshot Capture Implementation
+
+**Completed**:
+- Implemented screenshot capture using CoreGraphics `CGDisplayCreateImage`
+- Added WebP compression with Pillow (quality 80, max 1280px width)
+- Screenshots captured on app change (after 2s debounce) AND every 5 minutes
+- Dashboard timeline shows screenshot thumbnails matched to activities
+- Retention system with 7-day auto-cleanup
+
+**Files Created**:
+- `src/captains_log/trackers/screenshot_capture.py`
+- `src/captains_log/storage/screenshot_manager.py`
+- `src/captains_log/web/routes/screenshots.py`
+
+**Files Modified**:
+- `src/captains_log/core/orchestrator.py` - Screenshot lifecycle integration
+- `src/captains_log/core/config.py` - Added `capture_on_app_change` option, increased debounce to 2s
+- `src/captains_log/web/app.py` - Mount screenshots static files
+- `src/captains_log/web/routes/dashboard.py` - Proximity-based screenshot matching (60s window)
+- `src/captains_log/web/templates/timeline.html` - Thumbnail display
+
+**Key Decisions**:
+- Used CoreGraphics instead of ScreenCaptureKit (simpler synchronous API)
+- UTC timestamps for screenshots to match activity log timestamps
+- Proximity matching (within 60 seconds) instead of 5-minute interval rounding
+- 2-second debounce to filter swipe gestures
+
+**Configuration**:
+```yaml
+tracking:
+  debounce_ms: 2000  # Wait 2s before recording app switch
+
+screenshots:
+  enabled: true
+  interval_minutes: 5
+  capture_on_app_change: true
+  quality: 80
+  max_width: 1280
+  retention_days: 7
+```
+
+### 2026-01-15: Added Git Push Recurring Instruction
+
+**Completed**:
+- Added recurring instruction to always push changes to git after committing
+
+**Files Modified**:
+- `CLAUDE.md` - Added "Push to git" instruction to "After Completing Work" section
