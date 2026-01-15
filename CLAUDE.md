@@ -21,7 +21,18 @@ captains-log/
 │   │   └── buffer.py         # Event buffering with periodic flush
 │   │
 │   ├── storage/              # Data persistence
-│   │   └── database.py       # SQLite with WAL mode
+│   │   ├── database.py       # SQLite with WAL mode
+│   │   └── screenshot_manager.py  # Screenshot file/DB management
+│   │
+│   ├── ai/                   # AI summarization (Phase 3)
+│   │   ├── claude_client.py  # Anthropic API with vision support
+│   │   ├── batch_processor.py # Queue management for batch API
+│   │   ├── prompts.py        # Prompt templates
+│   │   └── schemas.py        # Pydantic response models
+│   │
+│   ├── summarizers/          # Summary generation
+│   │   ├── five_minute.py    # 5-min activity summarizer
+│   │   └── focus_calculator.py # Focus score algorithm
 │   │
 │   ├── cli/                  # Command-line interface
 │   │   ├── main.py           # Typer CLI commands
@@ -161,7 +172,7 @@ CREATE TABLE summaries (
 
 - [x] **Phase 1**: Core Daemon - Activity tracking, CLI, Web Dashboard
 - [x] **Phase 2**: Screenshot Capture - CoreGraphics, WebP compression, app-change triggers
-- [ ] **Phase 3**: AI Summaries - Claude Haiku, Batch API
+- [x] **Phase 3**: AI Summaries - Claude Haiku, Batch API, vision support, focus calculator
 - [ ] **Phase 4**: Aggregation - Daily/weekly summaries
 - [ ] **Phase 5**: Cloud Sync - Encrypted S3/R2
 - [ ] **Phase 6**: Integrations - Gmail, Calendar, Slack
@@ -398,3 +409,67 @@ screenshots:
 
 **Files Modified**:
 - `CLAUDE.md` - Added "Push to git" instruction to "After Completing Work" section
+
+### 2026-01-15: Phase 3 AI Summaries Implementation
+
+**Completed**:
+- Implemented Claude client with vision support (async, rate limiting, retry logic)
+- Created batch processor for queue management (batch API for 50% cost savings)
+- Implemented focus calculator with multi-factor scoring algorithm
+- Created 5-minute summarizer with periodic summary generation
+- Integrated AI summarization into orchestrator lifecycle
+- Added CLI commands for summary management
+
+**Files Created**:
+- `src/captains_log/ai/__init__.py` - AI module exports
+- `src/captains_log/ai/schemas.py` - Pydantic models (SummaryResponse, ActivityType, etc.)
+- `src/captains_log/ai/prompts.py` - Prompt templates for Claude
+- `src/captains_log/ai/claude_client.py` - Claude API wrapper with vision
+- `src/captains_log/ai/batch_processor.py` - Queue management and batch processing
+- `src/captains_log/summarizers/__init__.py` - Summarizer module exports
+- `src/captains_log/summarizers/focus_calculator.py` - Focus score algorithm
+- `src/captains_log/summarizers/five_minute.py` - 5-minute summary generator
+
+**Files Modified**:
+- `src/captains_log/core/orchestrator.py` - AI summarization lifecycle integration
+- `src/captains_log/cli/main.py` - Added `summaries`, `summaries-backfill`, `summaries-process` commands
+
+**Key Features**:
+- **Vision support**: Screenshots sent to Claude for context-aware analysis
+- **Batch API**: 50% cost reduction with scheduled batch processing (default: every 6 hours)
+- **Realtime mode**: Option to process summaries immediately (higher cost)
+- **Focus scoring**: Multi-factor algorithm considering context switches, app types, engagement
+- **Backfill support**: Generate summaries for historical data
+
+**CLI Commands**:
+```bash
+captains-log summaries                  # Show recent summaries
+captains-log summaries-backfill --hours 24  # Generate missing summaries
+captains-log summaries-process          # Process pending queue
+```
+
+**Configuration**:
+```yaml
+summarization:
+  enabled: true
+  model: claude-haiku-4-5-20241022
+  use_batch_api: true
+  batch_interval_hours: 6
+  vision_enabled: true
+  max_tokens: 1024
+
+# Requires: ANTHROPIC_API_KEY or CAPTAINS_LOG_CLAUDE_API_KEY
+```
+
+**Example Summary Output**:
+```json
+{
+  "primary_app": "VS Code",
+  "activity_type": "coding",
+  "focus_score": 8,
+  "key_activities": ["Implementing AI summarization", "Writing Claude client"],
+  "context": "Deep work session implementing Phase 3 AI features",
+  "context_switches": 2,
+  "tags": ["captains-log", "python", "anthropic"]
+}
+```

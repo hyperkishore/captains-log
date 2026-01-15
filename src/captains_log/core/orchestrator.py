@@ -18,6 +18,13 @@ from captains_log.trackers.app_monitor import AppInfo, AppMonitor
 from captains_log.trackers.buffer import ActivityBuffer, ActivityEvent
 from captains_log.trackers.idle_detector import IdleDetector
 from captains_log.trackers.window_tracker import WindowTracker
+from captains_log.trackers.work_context import WorkContextExtractor, WorkContext
+from captains_log.trackers.input_monitor import InputMonitor, InputStats
+from captains_log.trackers.screenshot_capture import ScreenshotCapture, ScreenshotInfo
+from captains_log.storage.screenshot_manager import ScreenshotManager
+from captains_log.ai.batch_processor import BatchProcessor
+from captains_log.summarizers.five_minute import FiveMinuteSummarizer
+from captains_log.summarizers.focus_calculator import FocusCalculator
 
 if TYPE_CHECKING:
     pass
@@ -44,9 +51,26 @@ class Orchestrator:
         self.window_tracker: WindowTracker | None = None
         self.idle_detector: IdleDetector | None = None
         self.buffer: ActivityBuffer | None = None
+        self.work_context_extractor: WorkContextExtractor | None = None
+        self.input_monitor: InputMonitor | None = None
+        self.screenshot_capture: ScreenshotCapture | None = None
+        self.screenshot_manager: ScreenshotManager | None = None
+
+        # AI summarization components
+        self.batch_processor: BatchProcessor | None = None
+        self.summarizer: FiveMinuteSummarizer | None = None
+        self.focus_calculator: FocusCalculator | None = None
+
+        # Current input stats (accumulated between app switches)
+        self._current_input_stats: InputStats | None = None
 
         # Background tasks
         self._tasks: list[asyncio.Task] = []
+
+        # Queue for pending screenshot saves (for app-change captures)
+        self._pending_screenshots: list[ScreenshotInfo] = []
+        self._last_app_change_screenshot: datetime | None = None
+        self._min_screenshot_interval = 5.0  # Minimum 5 seconds between app-change screenshots
 
         # PID file for daemon management
         self._pid_file = self.config.data_dir / "daemon.pid"
@@ -82,7 +106,9 @@ class Orchestrator:
             self.db = await init_database(self.config.db_path)
 
             # Check permissions
-            self.permissions = PermissionManager()
+            # Detect if we're running in daemon mode (stdout not a terminal)
+            daemon_mode = not sys.stdout.isatty()
+            self.permissions = PermissionManager(daemon_mode=daemon_mode)
             if not self.permissions.has_accessibility:
                 logger.warning("Accessibility permission not granted - window titles unavailable")
             if not self.permissions.has_screen_recording:
@@ -93,7 +119,7 @@ class Orchestrator:
                 idle_threshold=self.config.tracking.idle_threshold_seconds,
             )
 
-            self.window_tracker = WindowTracker()
+            self.window_tracker = WindowTracker(daemon_mode=daemon_mode)
             if not self.window_tracker.is_available:
                 logger.warning("Window tracking unavailable - titles/URLs won't be captured")
 
@@ -107,6 +133,77 @@ class Orchestrator:
             self.app_monitor = AppMonitor()
             self.app_monitor.set_debounce(self.config.tracking.debounce_ms)
 
+            # Initialize work context extractor
+            self.work_context_extractor = WorkContextExtractor()
+
+            # Initialize input monitor (keyboard/mouse tracking)
+            # This is optional - daemon continues without it if it fails
+            try:
+                self.input_monitor = InputMonitor()
+                if self.input_monitor.is_available:
+                    started = self.input_monitor.start(self._on_input_stats)
+                    if started:
+                        logger.info("Input monitoring started (keyboard/mouse tracking enabled)")
+                    else:
+                        logger.warning("Input monitor failed to start - engagement metrics disabled")
+                        self.input_monitor = None
+                else:
+                    logger.warning("Input monitoring unavailable - engagement metrics disabled")
+                    self.input_monitor = None
+            except Exception as e:
+                logger.warning(f"Failed to initialize input monitor: {e} - engagement metrics disabled")
+                self.input_monitor = None
+
+            # Initialize screenshot capture (optional - daemon continues without it)
+            if self.config.screenshots.enabled:
+                if self.permissions.has_screen_recording:
+                    try:
+                        # Initialize screenshot manager
+                        self.screenshot_manager = ScreenshotManager(
+                            db=self.db,
+                            screenshots_dir=self.config.screenshots_dir,
+                        )
+
+                        # Initialize screenshot capture
+                        self.screenshot_capture = ScreenshotCapture(
+                            screenshots_dir=self.config.screenshots_dir,
+                            interval_minutes=self.config.screenshots.interval_minutes,
+                            quality=self.config.screenshots.quality,
+                            max_width=self.config.screenshots.max_width,
+                            retention_days=self.config.screenshots.retention_days,
+                            excluded_apps=self.config.screenshots.excluded_apps,
+                        )
+
+                        # Wire up current app callback for filtering excluded apps
+                        self.screenshot_capture.set_current_app_callback(
+                            lambda: self.app_monitor.last_app.bundle_id
+                            if self.app_monitor and self.app_monitor.last_app
+                            else None
+                        )
+
+                        # Start screenshot capture with database save callback
+                        started = await self.screenshot_capture.start(
+                            on_capture=self._on_screenshot_captured
+                        )
+
+                        if started:
+                            logger.info(
+                                f"Screenshot capture started (every {self.config.screenshots.interval_minutes} min)"
+                            )
+                        else:
+                            logger.warning("Screenshot capture failed to start")
+                            self.screenshot_capture = None
+                            self.screenshot_manager = None
+
+                    except Exception as e:
+                        logger.warning(f"Failed to initialize screenshot capture: {e}")
+                        self.screenshot_capture = None
+                        self.screenshot_manager = None
+                else:
+                    logger.info(
+                        "Screenshot capture disabled - Screen Recording permission not granted"
+                    )
+
             # Start components
             await self.buffer.start()
             self.app_monitor.start(self._on_app_change)
@@ -116,6 +213,56 @@ class Orchestrator:
 
             # Setup signal handlers
             self._setup_signal_handlers()
+
+            # Start periodic cleanup task for screenshots
+            if self.screenshot_manager:
+                cleanup_task = asyncio.create_task(self._periodic_screenshot_cleanup())
+                self._tasks.append(cleanup_task)
+                logger.info("Screenshot cleanup task started (runs every hour)")
+
+                # Start task to process pending screenshots from app changes
+                pending_task = asyncio.create_task(self._process_pending_screenshots())
+                self._tasks.append(pending_task)
+                logger.info("Screenshot save task started")
+
+            # Initialize AI summarization (optional - daemon continues without it)
+            if self.config.summarization.enabled:
+                try:
+                    # Check for API key
+                    api_key = self.config.claude_api_key or os.environ.get("ANTHROPIC_API_KEY")
+                    if api_key:
+                        # Initialize focus calculator
+                        self.focus_calculator = FocusCalculator()
+
+                        # Initialize batch processor
+                        self.batch_processor = BatchProcessor(
+                            db=self.db,
+                            use_batch_api=self.config.summarization.use_batch_api,
+                            batch_interval_hours=self.config.summarization.batch_interval_hours,
+                        )
+                        await self.batch_processor.start()
+
+                        # Initialize 5-minute summarizer
+                        self.summarizer = FiveMinuteSummarizer(
+                            db=self.db,
+                            batch_processor=self.batch_processor,
+                            focus_calculator=self.focus_calculator,
+                            interval_minutes=5,
+                            screenshots_dir=self.config.screenshots_dir,
+                        )
+                        await self.summarizer.start()
+
+                        mode = "batch" if self.config.summarization.use_batch_api else "realtime"
+                        logger.info(f"AI summarization started ({mode} mode)")
+                    else:
+                        logger.warning(
+                            "AI summarization disabled - no API key configured. "
+                            "Set ANTHROPIC_API_KEY or CAPTAINS_LOG_CLAUDE_API_KEY"
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to initialize AI summarization: {e}")
+                    self.batch_processor = None
+                    self.summarizer = None
 
             logger.info("Captain's Log daemon started successfully")
 
@@ -132,6 +279,28 @@ class Orchestrator:
         logger.info("Stopping Captain's Log daemon...")
 
         self._running = False
+
+        # Stop AI summarization
+        if self.summarizer:
+            await self.summarizer.stop()
+            self.summarizer = None
+
+        if self.batch_processor:
+            await self.batch_processor.stop()
+            self.batch_processor = None
+
+        self.focus_calculator = None
+
+        # Stop screenshot capture
+        if self.screenshot_capture:
+            await self.screenshot_capture.stop()
+            self.screenshot_capture = None
+            self.screenshot_manager = None
+
+        # Stop input monitor
+        if self.input_monitor:
+            self.input_monitor.stop()
+            self.input_monitor = None
 
         # Stop app monitor
         if self.app_monitor:
@@ -182,14 +351,14 @@ class Orchestrator:
                 if window_title is None:
                     window_title = self.window_tracker.get_window_title(app_info.pid)
 
-                # Extract URL for browsers
-                url = self.window_tracker.extract_url_from_title(
-                    app_info.bundle_id, window_title
-                )
+                # Extract URL for browsers (use AppleScript for Chrome/Arc, Accessibility for Safari)
+                url = self.window_tracker.get_browser_url(app_info.bundle_id, app_info.pid)
 
-                # Special handling for Safari
-                if app_info.bundle_id == "com.apple.Safari" and url is None:
-                    url = self.window_tracker.get_safari_url(app_info.pid)
+                # Fallback to title parsing if AppleScript fails
+                if url is None:
+                    url = self.window_tracker.extract_url_from_title(
+                        app_info.bundle_id, window_title
+                    )
 
                 # Check fullscreen
                 is_fullscreen = self.window_tracker.is_fullscreen(app_info.pid)
@@ -199,7 +368,19 @@ class Orchestrator:
             if self.idle_detector:
                 idle_state = self.idle_detector.get_idle_state(app_info.bundle_id)
 
-            # Create event
+            # Extract work context from URL and window title
+            work_context: WorkContext | None = None
+            if self.work_context_extractor:
+                work_context = self.work_context_extractor.extract(
+                    url=url,
+                    window_title=window_title,
+                    app_name=app_info.app_name
+                )
+
+            # Get input stats (accumulated since last app change)
+            input_stats = self._get_and_reset_input_stats()
+
+            # Create event with work context and input stats
             event = ActivityEvent(
                 timestamp=app_info.timestamp,
                 app_name=app_info.app_name,
@@ -209,18 +390,136 @@ class Orchestrator:
                 idle_seconds=idle_state.total_idle_seconds if idle_state else 0.0,
                 idle_status=idle_state.status.value if idle_state else "ACTIVE",
                 is_fullscreen=is_fullscreen,
+                # Work context
+                work_category=work_context.category if work_context else None,
+                work_service=work_context.service if work_context else None,
+                work_project=work_context.project if work_context else None,
+                work_document=work_context.document if work_context else None,
+                work_meeting=work_context.meeting if work_context else None,
+                work_channel=work_context.channel if work_context else None,
+                work_issue_id=work_context.issue_id if work_context else None,
+                work_organization=work_context.organization if work_context else None,
+                # Input stats
+                keystrokes=input_stats.keystrokes if input_stats else 0,
+                mouse_clicks=input_stats.total_clicks if input_stats else 0,
+                scroll_events=input_stats.scroll_events if input_stats else 0,
+                engagement_score=input_stats.engagement_score if input_stats else 0.0,
             )
 
             # Add to buffer
             self.buffer.add(event)
 
+            # Log with work context info
+            context_info = ""
+            if work_context and work_context.summary:
+                context_info = f" [{work_context.summary}]"
+
+            engagement_info = ""
+            if input_stats and input_stats.keystrokes > 0:
+                engagement_info = f" (keys: {input_stats.keystrokes}, clicks: {input_stats.total_clicks})"
+
             logger.debug(
-                f"Captured: {app_info.app_name} - {window_title or 'no title'} "
-                f"(idle: {event.idle_status})"
+                f"Captured: {app_info.app_name} - {window_title or 'no title'}"
+                f"{context_info}{engagement_info} (idle: {event.idle_status})"
             )
+
+            # Capture screenshot on app change if enabled
+            if (
+                self.config.screenshots.capture_on_app_change
+                and self.screenshot_capture
+                and self.screenshot_capture.is_running
+            ):
+                # Debounce: skip if we took a screenshot too recently
+                now = datetime.utcnow()
+                should_capture = True
+                if self._last_app_change_screenshot:
+                    elapsed = (now - self._last_app_change_screenshot).total_seconds()
+                    if elapsed < self._min_screenshot_interval:
+                        should_capture = False
+                        logger.debug(f"Skipping app-change screenshot (debounce: {elapsed:.1f}s)")
+
+                if should_capture:
+                    # Capture synchronously (CoreGraphics is sync)
+                    try:
+                        info = self.screenshot_capture.capture_sync()
+                        if info:
+                            # Queue for async DB save
+                            self._pending_screenshots.append(info)
+                            self._last_app_change_screenshot = now
+                            logger.debug(f"App-change screenshot queued: {info.file_path.name}")
+                    except Exception as e:
+                        logger.error(f"App-change screenshot failed: {e}")
 
         except Exception as e:
             logger.error(f"Error processing app change: {e}")
+
+    def _on_input_stats(self, stats: InputStats) -> None:
+        """Callback for periodic input stats updates."""
+        # Store the latest stats - they'll be used on the next app change
+        self._current_input_stats = stats
+
+    async def _on_screenshot_captured(self, info: ScreenshotInfo) -> None:
+        """Handle captured screenshot - save metadata to database."""
+        if self.screenshot_manager:
+            try:
+                await self.screenshot_manager.save_screenshot(info)
+                logger.debug(f"Screenshot saved: {info.file_path.name}")
+            except Exception as e:
+                logger.error(f"Failed to save screenshot metadata: {e}")
+
+    async def _process_pending_screenshots(self) -> None:
+        """Periodically save pending screenshots to database."""
+        while self._running:
+            try:
+                await asyncio.sleep(1)  # Check every second
+
+                if not self._running or not self.screenshot_manager:
+                    break
+
+                # Process all pending screenshots
+                while self._pending_screenshots:
+                    info = self._pending_screenshots.pop(0)
+                    try:
+                        await self.screenshot_manager.save_screenshot(info)
+                        logger.debug(f"Saved app-change screenshot: {info.file_path.name}")
+                    except Exception as e:
+                        logger.error(f"Failed to save screenshot: {e}")
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error processing pending screenshots: {e}")
+
+    async def _periodic_screenshot_cleanup(self) -> None:
+        """Periodically clean up expired screenshots."""
+        cleanup_interval = 3600  # 1 hour
+
+        while self._running:
+            try:
+                await asyncio.sleep(cleanup_interval)
+
+                if not self._running or not self.screenshot_manager:
+                    break
+
+                # Run cleanup
+                files_deleted, records_updated = await self.screenshot_manager.cleanup_expired()
+
+                if files_deleted > 0 or records_updated > 0:
+                    logger.info(
+                        f"Screenshot cleanup: {files_deleted} files deleted, "
+                        f"{records_updated} records updated"
+                    )
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in screenshot cleanup: {e}")
+
+    def _get_and_reset_input_stats(self) -> InputStats | None:
+        """Get current input stats and reset for next period."""
+        if self.input_monitor and self.input_monitor.is_running:
+            return self.input_monitor.get_current_stats()
+        return self._current_input_stats
 
     def _setup_signal_handlers(self) -> None:
         """Setup signal handlers for graceful shutdown."""
@@ -311,6 +610,47 @@ class Orchestrator:
                 "available": self.window_tracker.is_available,
             }
 
+        if self.input_monitor:
+            health["input_monitor"] = {
+                "available": self.input_monitor.is_available,
+                "is_running": self.input_monitor.is_running,
+            }
+
+        health["work_context_extractor"] = {
+            "available": self.work_context_extractor is not None,
+        }
+
+        # Screenshot capture status
+        if self.screenshot_capture:
+            health["screenshot_capture"] = {
+                "available": self.screenshot_capture.is_available,
+                "is_running": self.screenshot_capture.is_running,
+                "interval_minutes": self.config.screenshots.interval_minutes,
+            }
+
+        # Screenshot storage stats
+        if self.screenshot_manager:
+            try:
+                stats = await self.screenshot_manager.get_storage_stats()
+                health["screenshots"] = stats
+            except Exception as e:
+                health["screenshots"] = {"error": str(e)}
+
+        # AI summarization status
+        if self.summarizer:
+            try:
+                summarizer_stats = await self.summarizer.get_stats()
+                health["summarizer"] = summarizer_stats
+            except Exception as e:
+                health["summarizer"] = {"error": str(e)}
+
+        if self.batch_processor:
+            try:
+                queue_stats = await self.batch_processor.get_queue_stats()
+                health["summary_queue"] = queue_stats
+            except Exception as e:
+                health["summary_queue"] = {"error": str(e)}
+
         return health
 
 
@@ -333,9 +673,28 @@ async def run_daemon() -> None:
     try:
         await orchestrator.start()
 
-        # Keep running until stopped
-        while orchestrator.is_running:
-            await asyncio.sleep(1)
+        # Run the CFRunLoop to receive NSWorkspace notifications
+        # This is required because NSWorkspace notifications are delivered via the RunLoop
+        try:
+            from PyObjCTools import AppHelper
+            from Foundation import NSRunLoop, NSDate
+
+            logger.info("Starting CFRunLoop for event processing...")
+
+            # Run the run loop in small increments so we can check if we should stop
+            while orchestrator.is_running:
+                # Run the RunLoop for a short interval to process pending events
+                NSRunLoop.currentRunLoop().runUntilDate_(
+                    NSDate.dateWithTimeIntervalSinceNow_(0.5)
+                )
+                # Give asyncio a chance to run
+                await asyncio.sleep(0.1)
+
+        except ImportError:
+            logger.warning("PyObjC RunLoop not available, falling back to asyncio only")
+            # Fallback: just use asyncio sleep (events won't be received)
+            while orchestrator.is_running:
+                await asyncio.sleep(1)
 
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received")
