@@ -1,0 +1,72 @@
+[project]
+name = "captains-log"
+version = "0.1.0"
+description = "A macOS personal activity tracking system with AI-powered insights"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # macOS APIs
+    "pyobjc-core>=10.0",
+    "pyobjc-framework-Cocoa>=10.0",
+    "pyobjc-framework-Quartz>=10.0",
+    "pyobjc-framework-ScreenCaptureKit>=10.0",
+    # Configuration
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "pyyaml>=6.0",
+    # Database
+    "aiosqlite>=0.19.0",
+    # CLI
+    "typer>=0.9.0",
+    "rich>=13.0",
+    # Web dashboard
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "jinja2>=3.1.0",
+    # AI
+    "anthropic>=0.40.0",
+    # Image processing
+    "pillow>=10.0.0",
+    # Scheduling
+    "apscheduler>=3.10.0",
+    # Cloud sync
+    "boto3>=1.34.0",
+    "cryptography>=42.0.0",
+    # Utilities
+    "psutil>=5.9.0",
+    "keyring>=24.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+]
+
+[project.scripts]
+captains-log = "captains_log.cli.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/captains_log"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

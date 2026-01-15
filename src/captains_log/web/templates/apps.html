@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Apps - Captain's Log{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">App Usage</h1>
+        <p class="text-gray-500">All-time application statistics</p>
+    </div>
+
+    <!-- Today's Apps -->
+    <div class="card">
+        <h3 class="font-semibold text-gray-900 mb-4">Today ({{ today }})</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {% for app in today_apps %}
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <div class="text-2xl font-bold text-gray-900">{{ app.count }}</div>
+                <div class="text-sm text-gray-600 truncate" title="{{ app.app_name }}">{{ app.app_name }}</div>
+            </div>
+            {% else %}
+            <div class="col-span-full text-center py-8 text-gray-500">
+                No apps tracked today yet.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- All-time Stats -->
+    <div class="card">
+        <h3 class="font-semibold text-gray-900 mb-4">All-Time Statistics</h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">App</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bundle ID</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Events</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">First Seen</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Seen</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for app in app_stats %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm font-medium text-gray-900">
+                            {{ app.app_name }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-500 font-mono text-xs">
+                            {{ app.bundle_id or '-' }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-900">
+                            <span class="font-semibold">{{ app.event_count }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-500">
+                            {{ app.first_seen.split('T')[0] if app.first_seen and 'T' in app.first_seen else app.first_seen[:10] if app.first_seen else '-' }}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-500">
+                            {{ app.last_seen.split('T')[0] if app.last_seen and 'T' in app.last_seen else app.last_seen[:10] if app.last_seen else '-' }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-8 text-center text-gray-500">
+                            No apps tracked yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Usage Chart -->
+    <div class="card">
+        <h3 class="font-semibold text-gray-900 mb-4">Top Apps Distribution</h3>
+        <canvas id="appsChart" height="100"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const appStats = {{ app_stats | tojson }};
+    const topApps = appStats.slice(0, 10);
+
+    new Chart(document.getElementById('appsChart'), {
+        type: 'bar',
+        data: {
+            labels: topApps.map(a => a.app_name),
+            datasets: [{
+                label: 'Total Events',
+                data: topApps.map(a => a.event_count),
+                backgroundColor: [
+                    '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+                    '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+</script>
+{% endblock %}

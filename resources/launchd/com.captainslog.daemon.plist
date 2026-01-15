@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Service identifier -->
+    <key>Label</key>
+    <string>com.captainslog.daemon</string>
+
+    <!-- Program to run -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON_PATH__</string>
+        <string>-m</string>
+        <string>captains_log</string>
+    </array>
+
+    <!-- Start on login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart if it crashes -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- Restart delay -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Nice priority (lower = higher priority, 10 = background) -->
+    <key>Nice</key>
+    <integer>10</integer>
+
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>__HOME__</string>
+
+    <!-- Log files -->
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/CaptainsLog/daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/CaptainsLog/daemon.log</string>
+
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:__PYTHON_BIN_PATH__</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
+        <key>PYTHONPATH</key>
+        <string>__PYTHONPATH__</string>
+    </dict>
+
+    <!-- Process type (background process) -->
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- Resource limits -->
+    <key>SoftResourceLimits</key>
+    <dict>
+        <!-- Max 100MB virtual memory -->
+        <key>MemoryLock</key>
+        <integer>104857600</integer>
+    </dict>
+
+    <!-- Abandon if can't start in 60 seconds -->
+    <key>AbandonProcessGroup</key>
+    <true/>
+</dict>
+</plist>
