@@ -83,7 +83,10 @@ class Orchestrator:
 
             # Check permissions
             self.permissions = PermissionManager()
-            self.permissions.check_and_request_permissions()
+            if not self.permissions.has_accessibility:
+                logger.warning("Accessibility permission not granted - window titles unavailable")
+            if not self.permissions.has_screen_recording:
+                logger.info("Screen Recording permission not granted - screenshots will be unavailable")
 
             # Initialize trackers
             self.idle_detector = IdleDetector(

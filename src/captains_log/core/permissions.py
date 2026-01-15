@@ -52,6 +52,16 @@ class PermissionManager:
         self._db = db
         self._state_cache: dict[PermissionType, PermissionState] = {}
 
+    @property
+    def has_accessibility(self) -> bool:
+        """Check if accessibility permission is granted."""
+        return self.check_accessibility()
+
+    @property
+    def has_screen_recording(self) -> bool:
+        """Check if screen recording permission is granted."""
+        return self.check_screen_recording()
+
     async def load_state(self) -> None:
         """Load permission state from database."""
         if self._db is None:
