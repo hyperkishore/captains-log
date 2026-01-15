@@ -19,7 +19,31 @@ from rich.text import Text
 
 from captains_log import __version__
 from captains_log.core.config import Config, get_config
-from captains_log.core.orchestrator import Orchestrator, get_orchestrator, run_daemon
+
+# Note: Orchestrator imports are deferred to avoid loading PyObjC before fork()
+# This is critical - macOS crashes if PyObjC is loaded before fork()
+# We use these lightweight functions to check daemon status without PyObjC
+
+
+def _get_daemon_pid(config: Config) -> int | None:
+    """Get daemon PID without importing PyObjC modules."""
+    pid_file = config.data_dir / "daemon.pid"
+    if not pid_file.exists():
+        return None
+    try:
+        pid = int(pid_file.read_text().strip())
+        # Check if process is actually running
+        os.kill(pid, 0)
+        return pid
+    except (ValueError, OSError):
+        # Process not running or invalid PID
+        pid_file.unlink(missing_ok=True)
+        return None
+
+
+def _is_daemon_running(config: Config) -> bool:
+    """Check if daemon is running without importing PyObjC modules."""
+    return _get_daemon_pid(config) is not None
 
 # Initialize Typer app
 app = typer.Typer(
@@ -84,9 +108,9 @@ def start(
     """Start the Captain's Log daemon."""
     config = get_config()
 
-    # Check if already running
-    if Orchestrator.is_daemon_running(config):
-        pid = Orchestrator.get_daemon_pid(config)
+    # Check if already running (using lightweight check without PyObjC)
+    if _is_daemon_running(config):
+        pid = _get_daemon_pid(config)
         console.print(f"[yellow]Daemon already running (PID: {pid})[/yellow]")
         raise typer.Exit(1)
 
@@ -98,58 +122,46 @@ def start(
         console.print("[green]Starting Captain's Log in foreground...[/green]")
         console.print("Press Ctrl+C to stop\n")
 
+        # Import PyObjC modules only when running in foreground (no fork)
+        from captains_log.core.orchestrator import run_daemon
+
         try:
             asyncio.run(run_daemon())
         except KeyboardInterrupt:
             console.print("\n[yellow]Stopped[/yellow]")
     else:
-        # Fork to background
+        # Start daemon as background subprocess
+        # NOTE: We use subprocess.Popen instead of fork() because PyObjC
+        # frameworks (AppKit, Foundation, etc.) crash after fork() on macOS
         console.print("[green]Starting Captain's Log daemon...[/green]")
 
-        # Double fork to daemonize
-        pid = os.fork()
-        if pid > 0:
-            # Parent process - wait a moment then check if started
-            import time
-            time.sleep(1)
-
-            if Orchestrator.is_daemon_running(config):
-                daemon_pid = Orchestrator.get_daemon_pid(config)
-                console.print(f"[green]Daemon started (PID: {daemon_pid})[/green]")
-                console.print(f"Logs: {config.log_dir / 'daemon.log'}")
-            else:
-                console.print("[red]Failed to start daemon - check logs[/red]")
-                raise typer.Exit(1)
-            return
-
-        # Child process - become session leader
-        os.setsid()
-
-        # Second fork
-        pid = os.fork()
-        if pid > 0:
-            sys.exit(0)
-
-        # Grandchild - actual daemon
-        # Redirect standard file descriptors
-        sys.stdout.flush()
-        sys.stderr.flush()
-
-        with open("/dev/null", "r") as devnull:
-            os.dup2(devnull.fileno(), sys.stdin.fileno())
+        import subprocess
 
         log_path = config.log_dir / "daemon.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(log_path, "a") as log:
-            os.dup2(log.fileno(), sys.stdout.fileno())
-            os.dup2(log.fileno(), sys.stderr.fileno())
+        # Launch new Python process with --foreground flag
+        # This avoids fork() issues with PyObjC
+        with open(log_path, "a") as log_file:
+            process = subprocess.Popen(
+                [sys.executable, "-m", "captains_log", "start", "--foreground", "--log-level", log_level],
+                stdin=subprocess.DEVNULL,
+                stdout=log_file,
+                stderr=log_file,
+                start_new_session=True,  # Detach from parent session
+            )
 
-        # Change working directory
-        os.chdir("/")
+        # Wait a moment then check if started
+        import time
+        time.sleep(1.5)
 
-        # Run daemon
-        asyncio.run(run_daemon())
+        if _is_daemon_running(config):
+            daemon_pid = _get_daemon_pid(config)
+            console.print(f"[green]Daemon started (PID: {daemon_pid})[/green]")
+            console.print(f"Logs: {config.log_dir / 'daemon.log'}")
+        else:
+            console.print("[red]Failed to start daemon - check logs[/red]")
+            raise typer.Exit(1)
 
 
 @app.command()
@@ -157,7 +169,7 @@ def stop() -> None:
     """Stop the Captain's Log daemon."""
     config = get_config()
 
-    pid = Orchestrator.get_daemon_pid(config)
+    pid = _get_daemon_pid(config)
     if pid is None:
         console.print("[yellow]Daemon is not running[/yellow]")
         return
@@ -171,7 +183,7 @@ def stop() -> None:
         import time
         for _ in range(10):  # Wait up to 10 seconds
             time.sleep(1)
-            if not Orchestrator.is_daemon_running(config):
+            if not _is_daemon_running(config):
                 console.print("[green]Daemon stopped[/green]")
                 return
 
@@ -180,7 +192,7 @@ def stop() -> None:
         os.kill(pid, signal.SIGKILL)
         time.sleep(1)
 
-        if Orchestrator.is_daemon_running(config):
+        if _is_daemon_running(config):
             console.print("[red]Failed to stop daemon[/red]")
             raise typer.Exit(1)
         else:
@@ -198,7 +210,7 @@ def status() -> None:
     """Show daemon status and basic information."""
     config = get_config()
 
-    pid = Orchestrator.get_daemon_pid(config)
+    pid = _get_daemon_pid(config)
 
     if pid is None:
         console.print(Panel(
@@ -245,7 +257,7 @@ def health() -> None:
     """Show detailed health status of all components."""
     config = get_config()
 
-    pid = Orchestrator.get_daemon_pid(config)
+    pid = _get_daemon_pid(config)
     if pid is None:
         console.print("[red]Daemon is not running[/red]")
         console.print("Use 'captains-log start' to begin tracking.")
@@ -569,6 +581,243 @@ def install_status() -> None:
 
     if not installed:
         console.print("\n[dim]Run 'captains-log install' to enable auto-start on login.[/dim]")
+
+
+@app.command()
+def summaries(
+    limit: int = typer.Option(10, "--limit", "-n", help="Number of summaries to show"),
+    hours: int = typer.Option(24, "--hours", help="Show summaries from last N hours"),
+) -> None:
+    """Show recent AI-generated summaries."""
+    config = get_config()
+
+    async def get_summaries():
+        from captains_log.storage.database import Database
+        import json
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            since = datetime.utcnow() - timedelta(hours=hours)
+
+            summaries = await db.fetch_all(
+                """
+                SELECT
+                    period_start, period_end, primary_app, activity_type,
+                    focus_score, context, context_switches, tags,
+                    tokens_input, tokens_output
+                FROM summaries
+                WHERE period_start >= ?
+                ORDER BY period_start DESC
+                LIMIT ?
+                """,
+                (since.isoformat(), limit),
+            )
+
+            # Get queue stats
+            queue_stats = await db.fetch_one(
+                """
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+                FROM summary_queue
+                """
+            )
+
+            return summaries, queue_stats
+
+        finally:
+            await db.close()
+
+    try:
+        summaries, queue_stats = asyncio.run(get_summaries())
+    except Exception as e:
+        console.print(f"[red]Error fetching summaries: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Queue stats
+    console.print(Panel(
+        f"Pending: {queue_stats['pending'] or 0} | "
+        f"Completed: {queue_stats['completed'] or 0} | "
+        f"Failed: {queue_stats['failed'] or 0}",
+        title="Summary Queue",
+        border_style="blue"
+    ))
+    console.print()
+
+    if not summaries:
+        console.print(f"[yellow]No summaries found in the last {hours} hours[/yellow]")
+        console.print("[dim]Summaries are generated automatically every 5 minutes when the daemon is running.[/dim]")
+        return
+
+    # Display summaries
+    for s in summaries:
+        try:
+            start = datetime.fromisoformat(s["period_start"].replace("Z", ""))
+            end = datetime.fromisoformat(s["period_end"].replace("Z", ""))
+        except (ValueError, TypeError):
+            continue
+
+        # Focus score color
+        focus = s.get("focus_score", 0)
+        if focus >= 8:
+            focus_color = "green"
+        elif focus >= 5:
+            focus_color = "yellow"
+        else:
+            focus_color = "red"
+
+        # Activity type emoji
+        activity_emojis = {
+            "coding": "💻",
+            "writing": "📝",
+            "communication": "💬",
+            "browsing": "🌐",
+            "meetings": "📞",
+            "design": "🎨",
+            "admin": "📋",
+            "entertainment": "🎮",
+            "learning": "📚",
+            "breaks": "☕",
+        }
+        activity_type = s.get("activity_type", "unknown")
+        emoji = activity_emojis.get(activity_type, "❓")
+
+        # Tags
+        tags = s.get("tags", "[]")
+        if isinstance(tags, str):
+            try:
+                tags = eval(tags) if tags else []
+            except Exception:
+                tags = []
+
+        tag_str = " ".join(f"[dim]#{t}[/dim]" for t in tags[:3]) if tags else ""
+
+        console.print(
+            f"[bold]{start.strftime('%H:%M')} - {end.strftime('%H:%M')}[/bold] "
+            f"{emoji} {s.get('primary_app', 'Unknown')} "
+            f"[{focus_color}]Focus: {focus}/10[/{focus_color}] "
+            f"[dim]({s.get('context_switches', 0)} switches)[/dim]"
+        )
+        if s.get("context"):
+            console.print(f"  [dim]{s['context'][:100]}...[/dim]" if len(s.get("context", "")) > 100 else f"  [dim]{s['context']}[/dim]")
+        if tag_str:
+            console.print(f"  {tag_str}")
+        console.print()
+
+
+@app.command(name="summaries-backfill")
+def summaries_backfill(
+    hours: int = typer.Option(24, "--hours", help="Backfill summaries for last N hours"),
+    limit: int = typer.Option(100, "--limit", help="Maximum summaries to generate"),
+) -> None:
+    """Generate summaries for periods that are missing."""
+    config = get_config()
+
+    # Check for API key
+    api_key = config.claude_api_key or os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        console.print("[red]No API key configured.[/red]")
+        console.print("Set ANTHROPIC_API_KEY or CAPTAINS_LOG_CLAUDE_API_KEY environment variable.")
+        raise typer.Exit(1)
+
+    async def do_backfill():
+        from captains_log.storage.database import Database
+        from captains_log.ai.batch_processor import BatchProcessor
+        from captains_log.summarizers.five_minute import FiveMinuteSummarizer
+        from captains_log.summarizers.focus_calculator import FocusCalculator
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            batch_processor = BatchProcessor(
+                db=db,
+                use_batch_api=config.summarization.use_batch_api,
+            )
+
+            summarizer = FiveMinuteSummarizer(
+                db=db,
+                batch_processor=batch_processor,
+                focus_calculator=FocusCalculator(),
+                screenshots_dir=config.screenshots_dir,
+            )
+
+            since = datetime.utcnow() - timedelta(hours=hours)
+            queued = await summarizer.backfill_summaries(since=since, limit=limit)
+
+            return queued
+
+        finally:
+            await db.close()
+
+    console.print(f"[yellow]Backfilling summaries for last {hours} hours...[/yellow]")
+
+    try:
+        queued = asyncio.run(do_backfill())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    if queued > 0:
+        console.print(f"[green]Queued {queued} summaries for processing.[/green]")
+        if config.summarization.use_batch_api:
+            console.print(f"[dim]Summaries will be processed in the next batch (every {config.summarization.batch_interval_hours} hours).[/dim]")
+        else:
+            console.print("[dim]Summaries will be processed in real-time.[/dim]")
+    else:
+        console.print("[yellow]No missing summaries found.[/yellow]")
+
+
+@app.command(name="summaries-process")
+def summaries_process(
+    limit: int = typer.Option(50, "--limit", help="Maximum summaries to process"),
+) -> None:
+    """Process pending summaries in the queue (requires API key)."""
+    config = get_config()
+
+    # Check for API key
+    api_key = config.claude_api_key or os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        console.print("[red]No API key configured.[/red]")
+        console.print("Set ANTHROPIC_API_KEY or CAPTAINS_LOG_CLAUDE_API_KEY environment variable.")
+        raise typer.Exit(1)
+
+    async def do_process():
+        from captains_log.storage.database import Database
+        from captains_log.ai.batch_processor import BatchProcessor
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            batch_processor = BatchProcessor(
+                db=db,
+                use_batch_api=False,  # Process immediately
+            )
+
+            processed = await batch_processor.process_queue(limit=limit)
+            usage = batch_processor.claude_client.get_usage_stats()
+
+            return processed, usage
+
+        finally:
+            await db.close()
+
+    console.print(f"[yellow]Processing pending summaries (limit: {limit})...[/yellow]")
+
+    try:
+        processed, usage = asyncio.run(do_process())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"[green]Processed {processed} summaries.[/green]")
+    console.print(f"[dim]Tokens used: {usage['total_input_tokens']} in, {usage['total_output_tokens']} out[/dim]")
+    console.print(f"[dim]Estimated cost: ${usage['estimated_cost_usd']:.4f}[/dim]")
 
 
 @app.callback()
