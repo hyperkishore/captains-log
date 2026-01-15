@@ -19,11 +19,37 @@ A macOS personal activity tracking system with AI-powered insights. Passively ca
 
 ## Quick Start
 
-### Using Make (Recommended)
+### Using Homebrew (Recommended)
+
+```bash
+# Add the tap and install
+brew tap hyperkishore/captains-log
+brew install captains-log
+
+# Start the service (runs at login)
+brew services start captains-log
+
+# Open the dashboard
+captains-log dashboard
+# Then open http://127.0.0.1:8080
+```
+
+### Using the Install Script
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/captains-log.git
+git clone https://github.com/hyperkishore/captains-log.git
+cd captains-log
+
+# Run the installer
+./scripts/install.sh
+```
+
+### Using Make
+
+```bash
+# Clone the repository
+git clone https://github.com/hyperkishore/captains-log.git
 cd captains-log
 
 # Install
@@ -177,6 +203,33 @@ make format
 # Type check
 make typecheck
 ```
+
+## Menu Bar Integration (SwiftBar)
+
+Captain's Log includes a SwiftBar plugin for quick access to your stats from the menu bar.
+
+### Installation
+
+```bash
+# Install SwiftBar
+brew install --cask swiftbar
+
+# If installed via Homebrew
+cp $(brew --prefix)/share/swiftbar/captains-log.1m.sh ~/Library/Application\ Support/SwiftBar/Plugins/
+
+# If installed from source
+cp scripts/captains-log.1m.sh ~/Library/Application\ Support/SwiftBar/Plugins/
+```
+
+### Features
+
+- Shows today's activity count in menu bar (🚢 123)
+- Dropdown with:
+  - Today's stats (events, apps, top app, last activity)
+  - Top 5 apps for the day
+  - Quick link to open dashboard
+  - Daemon and dashboard status with start buttons
+  - Manual refresh option
 
 ## Privacy & Security
 
