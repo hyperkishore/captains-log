@@ -21,7 +21,7 @@ import type {
 const LOCAL_API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
 
 // Cloud API URL (Railway)
-const CLOUD_API = process.env.NEXT_PUBLIC_CLOUD_API_URL || 'https://captains-log-api.up.railway.app';
+const CLOUD_API = process.env.NEXT_PUBLIC_CLOUD_API_URL || 'https://generous-gentleness-production.up.railway.app';
 
 // Get device ID from URL or localStorage
 export function getDeviceId(): string | null {
