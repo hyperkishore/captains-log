@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Header } from '@/components/layout/Header';
 import { MetricCard } from '@/components/dashboard/MetricCard';
-import { getStats, getTimeBlocks, getPareto, getDailyInsights } from '@/lib/api';
+import { getStats, getTimeBlocks, getPareto, getDailyInsights, getDeviceId, isCloudMode } from '@/lib/api';
 import type { DailyStats, TimeBlock, ParetoAnalysis, Insights } from '@/lib/types';
-import { Activity, Clock, Zap, Target, Brain, AlertCircle } from 'lucide-react';
+import { Activity, Clock, Zap, Target, Brain, AlertCircle, Cloud, Share2, Copy, Check } from 'lucide-react';
 
 // Demo data for when API is unavailable
 const DEMO_STATS: DailyStats = {
@@ -87,8 +87,34 @@ export default function Dashboard() {
   const [insights, setInsights] = useState<Insights | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(false);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [cloudMode, setCloudMode] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const dateStr = format(date, 'yyyy-MM-dd');
+
+  // Check cloud mode on mount
+  useEffect(() => {
+    const id = getDeviceId();
+    setDeviceId(id);
+    setCloudMode(isCloudMode());
+  }, []);
+
+  // Generate share URL
+  const getShareUrl = () => {
+    if (typeof window === 'undefined') return '';
+    const baseUrl = window.location.origin;
+    return deviceId ? `${baseUrl}?device=${deviceId}` : '';
+  };
+
+  const copyShareLink = async () => {
+    const url = getShareUrl();
+    if (url) {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   useEffect(() => {
     async function fetchData() {
@@ -155,6 +181,23 @@ export default function Dashboard() {
       <Header title="Dashboard" date={date} onDateChange={setDate} />
 
       <div className="p-6 space-y-6">
+        {/* Cloud Mode Banner */}
+        {cloudMode && !isDemo && (
+          <div className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-xl p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center">
+                <Cloud className="w-5 h-5 text-cyan-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-cyan-300">Cloud Dashboard</p>
+                <p className="text-sm text-slate-400">
+                  Viewing synced data • Device: {deviceId?.slice(0, 8)}...
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Demo Mode Banner */}
         {isDemo && (
           <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 rounded-xl p-4 flex items-center justify-between">
@@ -173,6 +216,30 @@ export default function Dashboard() {
             >
               Install Now
             </a>
+          </div>
+        )}
+
+        {/* Local Mode Banner with Share Link */}
+        {!isDemo && !cloudMode && deviceId && (
+          <div className="bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 rounded-xl p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <Share2 className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-emerald-300">Your Dashboard</p>
+                <p className="text-sm text-slate-400">
+                  Device ID: {deviceId.slice(0, 8)}... • Enable cloud sync to share
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={copyShareLink}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? 'Copied!' : 'Copy Share Link'}
+            </button>
           </div>
         )}
         {/* Metrics Grid */}
