@@ -20,44 +20,61 @@ const DEMO_STATS: DailyStats = {
     { app_name: 'Slack', count: 54 },
     { app_name: 'Figma', count: 42 },
   ],
+  hourly_breakdown: [
+    { hour: '9 AM', count: 45 },
+    { hour: '10 AM', count: 52 },
+    { hour: '11 AM', count: 48 },
+    { hour: '12 PM', count: 20 },
+    { hour: '1 PM', count: 55 },
+    { hour: '2 PM', count: 58 },
+    { hour: '3 PM', count: 50 },
+    { hour: '4 PM', count: 45 },
+    { hour: '5 PM', count: 35 },
+  ],
 };
 
 const DEMO_TIME_BLOCKS: TimeBlock[] = [
-  { hour: 9, hour_label: '9 AM', total: 45, categories: { Development: 30, Communication: 10, Other: 5 } },
-  { hour: 10, hour_label: '10 AM', total: 52, categories: { Development: 40, Design: 8, Communication: 4 } },
-  { hour: 11, hour_label: '11 AM', total: 48, categories: { Development: 35, Meeting: 10, Communication: 3 } },
-  { hour: 12, hour_label: '12 PM', total: 20, categories: { Other: 15, Communication: 5 } },
-  { hour: 13, hour_label: '1 PM', total: 55, categories: { Development: 45, Communication: 6, Design: 4 } },
-  { hour: 14, hour_label: '2 PM', total: 58, categories: { Development: 48, Productivity: 6, Communication: 4 } },
-  { hour: 15, hour_label: '3 PM', total: 50, categories: { Development: 38, Meeting: 8, Communication: 4 } },
-  { hour: 16, hour_label: '4 PM', total: 45, categories: { Development: 32, Design: 8, Communication: 5 } },
-  { hour: 17, hour_label: '5 PM', total: 35, categories: { Development: 22, Communication: 8, Other: 5 } },
+  { hour: 9, hour_label: '9 AM', total: 45, categories: { Development: 30, Communication: 10, Other: 5 }, primary_category: 'Development' },
+  { hour: 10, hour_label: '10 AM', total: 52, categories: { Development: 40, Design: 8, Communication: 4 }, primary_category: 'Development' },
+  { hour: 11, hour_label: '11 AM', total: 48, categories: { Development: 35, Meeting: 10, Communication: 3 }, primary_category: 'Development' },
+  { hour: 12, hour_label: '12 PM', total: 20, categories: { Other: 15, Communication: 5 }, primary_category: 'Other' },
+  { hour: 13, hour_label: '1 PM', total: 55, categories: { Development: 45, Communication: 6, Design: 4 }, primary_category: 'Development' },
+  { hour: 14, hour_label: '2 PM', total: 58, categories: { Development: 48, Productivity: 6, Communication: 4 }, primary_category: 'Development' },
+  { hour: 15, hour_label: '3 PM', total: 50, categories: { Development: 38, Meeting: 8, Communication: 4 }, primary_category: 'Development' },
+  { hour: 16, hour_label: '4 PM', total: 45, categories: { Development: 32, Design: 8, Communication: 5 }, primary_category: 'Development' },
+  { hour: 17, hour_label: '5 PM', total: 35, categories: { Development: 22, Communication: 8, Other: 5 }, primary_category: 'Development' },
 ];
 
 const DEMO_PARETO: ParetoAnalysis = {
   top_apps: [
-    { app_name: 'VS Code', count: 156, percent: 32.5 },
-    { app_name: 'Chrome', count: 98, percent: 20.4 },
-    { app_name: 'Terminal', count: 67, percent: 14.0 },
+    { app: 'VS Code', count: 156, percent: 32.5, cumulative_percent: 32.5 },
+    { app: 'Chrome', count: 98, percent: 20.4, cumulative_percent: 52.9 },
+    { app: 'Terminal', count: 67, percent: 14.0, cumulative_percent: 66.9 },
+  ],
+  rest_apps: [
+    { app: 'Slack', count: 54, percent: 11.3, cumulative_percent: 78.2 },
+    { app: 'Figma', count: 42, percent: 8.8, cumulative_percent: 87.0 },
   ],
   top_percent: 20,
-  total_percent: 66.9,
   ratio: '3/12',
 };
 
 const DEMO_INSIGHTS: Insights = {
+  narrative: 'A productive day focused on development with minimal distractions.',
   metrics: {
     total_events: 480,
     context_switches: 23,
     deep_work_minutes: 240,
     focus_score: 78,
+    productive_hours: 6.5,
+    top_category: 'Development',
   },
   wins: [
     { title: '4 hours of deep work', description: 'Great focus session in the morning!' },
     { title: 'Low context switches', description: 'Only 23 switches - well done!' },
   ],
   improvements: [
-    { title: 'Afternoon slump', description: 'Consider a short walk after lunch' },
+    { title: 'Afternoon slump', description: 'Consider a short walk after lunch', severity: 'info' },
   ],
   recommendations: [],
 };
