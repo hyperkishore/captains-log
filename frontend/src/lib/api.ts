@@ -17,10 +17,78 @@ import type {
   Screenshot,
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+// Local backend URL
+const LOCAL_API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+
+// Cloud API URL (Railway)
+const CLOUD_API = process.env.NEXT_PUBLIC_CLOUD_API_URL || 'https://captains-log-api.up.railway.app';
+
+// Get device ID from URL or localStorage
+export function getDeviceId(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  // Check URL parameter first
+  const params = new URLSearchParams(window.location.search);
+  const urlDeviceId = params.get('device');
+  if (urlDeviceId) {
+    // Store in localStorage for persistence
+    localStorage.setItem('captains_log_device_id', urlDeviceId);
+    return urlDeviceId;
+  }
+
+  // Fall back to localStorage
+  return localStorage.getItem('captains_log_device_id');
+}
+
+// Check if we're using cloud mode
+export function isCloudMode(): boolean {
+  return getDeviceId() !== null;
+}
+
+// Get the appropriate API base URL
+export function getApiBase(): string {
+  const deviceId = getDeviceId();
+  if (deviceId) {
+    return CLOUD_API;
+  }
+  return LOCAL_API;
+}
+
+// Get cloud URL with device ID prefix for endpoints
+function getCloudEndpoint(endpoint: string, deviceId: string): string {
+  // Transform /api/stats/2026-01-16 -> /api/{deviceId}/stats/2026-01-16
+  if (endpoint.startsWith('/api/stats/')) {
+    return endpoint.replace('/api/stats/', `/api/${deviceId}/stats/`);
+  }
+  if (endpoint.startsWith('/api/analytics/time-blocks/')) {
+    return endpoint.replace('/api/analytics/time-blocks/', `/api/${deviceId}/time-blocks/`);
+  }
+  if (endpoint.startsWith('/api/analytics/pareto/')) {
+    return endpoint.replace('/api/analytics/pareto/', `/api/${deviceId}/pareto/`);
+  }
+  if (endpoint.startsWith('/api/insights/daily/')) {
+    return endpoint.replace('/api/insights/daily/', `/api/${deviceId}/insights/`);
+  }
+  if (endpoint.startsWith('/api/analytics/focus/')) {
+    return endpoint.replace('/api/analytics/focus/', `/api/${deviceId}/focus/`);
+  }
+  // Default: not supported in cloud mode
+  return endpoint;
+}
 
 async function fetchAPI<T>(endpoint: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${endpoint}`);
+  const deviceId = getDeviceId();
+  let url: string;
+
+  if (deviceId) {
+    // Cloud mode: use cloud API with device-prefixed endpoint
+    url = `${CLOUD_API}${getCloudEndpoint(endpoint, deviceId)}`;
+  } else {
+    // Local mode: use local API
+    url = `${LOCAL_API}${endpoint}`;
+  }
+
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
@@ -113,7 +181,8 @@ export async function getNearestScreenshot(timestamp: string, maxDelta = 300): P
 
 // Screenshot URL helper
 export function getScreenshotUrl(screenshot: Screenshot): string {
-  return `${API_BASE}/screenshots/files/${screenshot.file_path}`;
+  // Screenshots are only available in local mode
+  return `${LOCAL_API}/screenshots/files/${screenshot.file_path}`;
 }
 
 // Screenshot analysis

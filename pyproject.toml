@@ -33,6 +33,7 @@ dependencies = [
     # Cloud sync
     "boto3>=1.34.0",
     "cryptography>=42.0.0",
+    "aiohttp>=3.9.0",
     # Utilities
     "psutil>=5.9.0",
     "keyring>=24.0.0",

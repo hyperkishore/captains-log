@@ -70,11 +70,14 @@ class SyncConfig(BaseModel):
     """Cloud sync configuration."""
 
     enabled: bool = False
-    provider: str = Field(default="s3", pattern="^(s3|r2)$")
-    bucket: str = Field(default="")
-    region: str = Field(default="us-west-2")
-    endpoint: str | None = Field(default=None, description="Custom endpoint for R2")
-    encrypt: bool = Field(default=True, description="Client-side encryption")
+    cloud_api_url: str = Field(
+        default="https://captains-log-api.up.railway.app",
+        description="Cloud API URL for syncing"
+    )
+    sync_interval_minutes: int = Field(default=5, ge=1, le=60, description="Sync frequency")
+    sync_activities: bool = Field(default=False, description="Sync raw activities (more data)")
+    sync_stats: bool = Field(default=True, description="Sync daily aggregated stats")
+    sync_summaries: bool = Field(default=True, description="Sync AI summaries")
 
 
 class Config(BaseSettings):
@@ -111,6 +114,25 @@ class Config(BaseSettings):
     def db_path(self) -> Path:
         """Path to SQLite database."""
         return self.data_dir / "captains_log.db"
+
+    @property
+    def device_id_file(self) -> Path:
+        """Path to device ID file."""
+        return self.data_dir / "device_id"
+
+    @property
+    def device_id(self) -> str:
+        """Get or generate unique device ID."""
+        import uuid
+        device_file = self.device_id_file
+        if device_file.exists():
+            return device_file.read_text().strip()
+        # Generate new UUID
+        new_id = str(uuid.uuid4())
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        device_file.write_text(new_id)
+        os.chmod(device_file, 0o600)
+        return new_id
 
     @property
     def screenshots_dir(self) -> Path:
