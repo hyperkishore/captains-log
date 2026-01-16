@@ -2,7 +2,7 @@ interface MetricCardProps {
   title: string;
   value: string | number;
   subtitle?: string;
-  color?: 'blue' | 'green' | 'purple' | 'orange';
+  color?: 'blue' | 'green' | 'purple' | 'orange' | 'red';
 }
 
 const colorClasses = {
@@ -10,6 +10,7 @@ const colorClasses = {
   green: 'text-emerald-400',
   purple: 'text-purple-400',
   orange: 'text-amber-400',
+  red: 'text-red-400',
 };
 
 export function MetricCard({ title, value, subtitle, color = 'blue' }: MetricCardProps) {
