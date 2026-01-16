@@ -35,7 +35,6 @@ class SyncedActivity(Base):
 
     __table_args__ = (
         Index("idx_activity_device_timestamp", "device_id", "timestamp"),
-        Index("idx_activity_device_date", "device_id", timestamp.cast(String)),
     )
 
 
