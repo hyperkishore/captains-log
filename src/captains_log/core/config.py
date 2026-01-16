@@ -71,7 +71,7 @@ class SyncConfig(BaseModel):
 
     enabled: bool = False
     cloud_api_url: str = Field(
-        default="https://captains-log-api.up.railway.app",
+        default="https://generous-gentleness-production.up.railway.app",
         description="Cloud API URL for syncing"
     )
     sync_interval_minutes: int = Field(default=5, ge=1, le=60, description="Sync frequency")
