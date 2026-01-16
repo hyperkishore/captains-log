@@ -6,17 +6,18 @@ import asyncio
 import logging
 import shutil
 import sqlite3
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 import aiosqlite
 
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 4
 
 # Database schema
 SCHEMA = """
@@ -26,7 +27,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
     applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Core activity tracking
+-- Core activity tracking (base schema - new columns added via migration)
 CREATE TABLE IF NOT EXISTS activity_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME NOT NULL,
@@ -242,11 +243,144 @@ class Database:
             current_version = row[0] if row and row[0] else 0
 
         if current_version < SCHEMA_VERSION:
+            # Run migrations
+            await self._run_migrations(current_version)
             await self._connection.execute(
                 "INSERT INTO schema_version (version) VALUES (?)",
                 (SCHEMA_VERSION,),
             )
             logger.info(f"Schema updated to version {SCHEMA_VERSION}")
+
+    async def _run_migrations(self, from_version: int) -> None:
+        """Run database migrations."""
+        if self._connection is None:
+            return
+
+        # Migration from version 1 to 2: Add work context and input stats columns
+        if from_version < 2:
+            logger.info("Running migration v1 -> v2: Adding work context and input stats columns")
+
+            # Get existing columns
+            async with self._connection.execute("PRAGMA table_info(activity_logs)") as cursor:
+                existing_cols = {row[1] for row in await cursor.fetchall()}
+
+            # Add new columns if they don't exist
+            new_columns = [
+                ("work_category", "TEXT"),
+                ("work_service", "TEXT"),
+                ("work_project", "TEXT"),
+                ("work_document", "TEXT"),
+                ("work_meeting", "TEXT"),
+                ("work_channel", "TEXT"),
+                ("work_issue_id", "TEXT"),
+                ("work_organization", "TEXT"),
+                ("keystrokes", "INTEGER DEFAULT 0"),
+                ("mouse_clicks", "INTEGER DEFAULT 0"),
+                ("scroll_events", "INTEGER DEFAULT 0"),
+                ("engagement_score", "REAL DEFAULT 0"),
+            ]
+
+            for col_name, col_type in new_columns:
+                if col_name not in existing_cols:
+                    try:
+                        await self._connection.execute(
+                            f"ALTER TABLE activity_logs ADD COLUMN {col_name} {col_type}"
+                        )
+                        logger.debug(f"Added column {col_name}")
+                    except sqlite3.OperationalError as e:
+                        if "duplicate column name" not in str(e).lower():
+                            raise
+
+            # Create indexes for new columns (ignore errors if they already exist)
+            new_indexes = [
+                ("idx_activity_work_category", "work_category"),
+                ("idx_activity_work_project", "work_project"),
+                ("idx_activity_work_org", "work_organization"),
+            ]
+            for idx_name, col_name in new_indexes:
+                try:
+                    await self._connection.execute(
+                        f"CREATE INDEX IF NOT EXISTS {idx_name} ON activity_logs({col_name})"
+                    )
+                except sqlite3.OperationalError:
+                    pass  # Index might already exist
+
+            logger.info("Migration v1 -> v2 complete")
+
+        # Migration from version 2 to 3: Add screenshot analysis columns
+        if from_version < 3:
+            logger.info("Running migration v2 -> v3: Adding screenshot analysis columns")
+
+            # Get existing columns in screenshots table
+            async with self._connection.execute("PRAGMA table_info(screenshots)") as cursor:
+                existing_cols = {row[1] for row in await cursor.fetchall()}
+
+            # Add new analysis columns if they don't exist
+            analysis_columns = [
+                ("analysis_summary", "TEXT"),
+                ("analysis_type", "TEXT"),
+                ("analysis_focus", "TEXT"),
+                ("analysis_cost", "REAL"),
+                ("analyzed_at", "DATETIME"),
+            ]
+
+            for col_name, col_type in analysis_columns:
+                if col_name not in existing_cols:
+                    try:
+                        await self._connection.execute(
+                            f"ALTER TABLE screenshots ADD COLUMN {col_name} {col_type}"
+                        )
+                        logger.debug(f"Added column {col_name} to screenshots")
+                    except sqlite3.OperationalError as e:
+                        if "duplicate column name" not in str(e).lower():
+                            raise
+
+            logger.info("Migration v2 -> v3 complete")
+
+        # Migration from version 3 to 4: Add rich work analysis columns to screenshots
+        if from_version < 4:
+            logger.info("Running migration v3 -> v4: Adding rich work analysis columns")
+
+            # Get existing columns in screenshots table
+            async with self._connection.execute("PRAGMA table_info(screenshots)") as cursor:
+                existing_cols = {row[1] for row in await cursor.fetchall()}
+
+            # Add new work analysis columns
+            work_columns = [
+                ("analysis_project", "TEXT"),
+                ("analysis_category", "TEXT"),
+                ("analysis_subcategory", "TEXT"),
+                ("analysis_technologies", "TEXT"),  # JSON array
+                ("analysis_task", "TEXT"),
+                ("analysis_file", "TEXT"),
+                ("analysis_deep_work_score", "INTEGER"),
+                ("analysis_context_richness", "INTEGER"),
+                ("analysis_full", "TEXT"),  # Full JSON response
+            ]
+
+            for col_name, col_type in work_columns:
+                if col_name not in existing_cols:
+                    try:
+                        await self._connection.execute(
+                            f"ALTER TABLE screenshots ADD COLUMN {col_name} {col_type}"
+                        )
+                        logger.debug(f"Added column {col_name} to screenshots")
+                    except sqlite3.OperationalError as e:
+                        if "duplicate column name" not in str(e).lower():
+                            raise
+
+            # Add indexes for project and category queries
+            try:
+                await self._connection.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_screenshot_project ON screenshots(analysis_project)"
+                )
+                await self._connection.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_screenshot_category ON screenshots(analysis_category)"
+                )
+            except sqlite3.OperationalError:
+                pass
+
+            logger.info("Migration v3 -> v4 complete")
 
     async def close(self) -> None:
         """Close database connection."""

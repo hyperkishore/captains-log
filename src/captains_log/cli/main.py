@@ -9,13 +9,11 @@ import signal
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 
 from captains_log import __version__
 from captains_log.core.config import Config, get_config
@@ -143,7 +141,7 @@ def start(
         # Launch new Python process with --foreground flag
         # This avoids fork() issues with PyObjC
         with open(log_path, "a") as log_file:
-            process = subprocess.Popen(
+            subprocess.Popen(
                 [sys.executable, "-m", "captains_log", "start", "--foreground", "--log-level", log_level],
                 stdin=subprocess.DEVNULL,
                 stdout=log_file,
@@ -267,8 +265,8 @@ def health() -> None:
 
     # We need to query the database directly since the daemon is in a separate process
     async def get_health_info():
-        from captains_log.storage.database import Database
         from captains_log.core.permissions import PermissionManager
+        from captains_log.storage.database import Database
 
         db = Database(config.db_path)
         await db.connect()
@@ -481,7 +479,7 @@ def dashboard(
     host = host or config.web.host
     port = port or config.web.port
 
-    console.print(f"[green]Starting Captain's Log Dashboard...[/green]")
+    console.print("[green]Starting Captain's Log Dashboard...[/green]")
     console.print(f"Open [blue]http://{host}:{port}[/blue] in your browser")
     console.print("Press Ctrl+C to stop\n")
 
@@ -507,7 +505,8 @@ def version() -> None:
 @app.command()
 def install() -> None:
     """Install as launchd service for auto-start on login."""
-    from captains_log.cli.install import install as do_install, is_installed, is_loaded
+    from captains_log.cli.install import install as do_install
+    from captains_log.cli.install import is_installed, is_loaded
 
     if is_installed():
         console.print("[yellow]Service already installed[/yellow]")
@@ -531,7 +530,8 @@ def install() -> None:
 @app.command()
 def uninstall() -> None:
     """Uninstall the launchd service."""
-    from captains_log.cli.install import uninstall as do_uninstall, is_installed
+    from captains_log.cli.install import is_installed
+    from captains_log.cli.install import uninstall as do_uninstall
 
     if not is_installed():
         console.print("[yellow]Service not installed[/yellow]")
@@ -592,8 +592,8 @@ def summaries(
     config = get_config()
 
     async def get_summaries():
+
         from captains_log.storage.database import Database
-        import json
 
         db = Database(config.db_path)
         await db.connect()
@@ -725,8 +725,8 @@ def summaries_backfill(
         raise typer.Exit(1)
 
     async def do_backfill():
-        from captains_log.storage.database import Database
         from captains_log.ai.batch_processor import BatchProcessor
+        from captains_log.storage.database import Database
         from captains_log.summarizers.five_minute import FiveMinuteSummarizer
         from captains_log.summarizers.focus_calculator import FocusCalculator
 
@@ -787,8 +787,8 @@ def summaries_process(
         raise typer.Exit(1)
 
     async def do_process():
-        from captains_log.storage.database import Database
         from captains_log.ai.batch_processor import BatchProcessor
+        from captains_log.storage.database import Database
 
         db = Database(config.db_path)
         await db.connect()

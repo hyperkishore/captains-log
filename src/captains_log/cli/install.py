@@ -6,7 +6,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from string import Template
 
 # Service identifier
 SERVICE_LABEL = "com.captainslog.daemon"

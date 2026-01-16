@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from captains_log.core.config import get_config
+from captains_log.core.config import Config, get_config
 from captains_log.storage.database import Database
 
 logger = logging.getLogger(__name__)
+
+# Global config reference for routes
+_config: Config | None = None
 
 # Paths
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -32,6 +36,14 @@ async def get_db() -> Database:
         _db = Database(config.db_path)
         await _db.connect()
     return _db
+
+
+def get_web_config() -> Config:
+    """Get config for web routes."""
+    global _config
+    if _config is None:
+        _config = get_config()
+    return _config
 
 
 @asynccontextmanager
@@ -63,19 +75,53 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Add CORS middleware for React frontend
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Get config for directory paths
+    config = get_config()
+
     # Mount static files
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    # Mount screenshots directory for serving screenshot images
+    screenshots_dir = config.screenshots_dir
+    if screenshots_dir.exists():
+        app.mount(
+            "/screenshots/files",
+            StaticFiles(directory=screenshots_dir),
+            name="screenshot_files",
+        )
+        logger.info(f"Mounted screenshots directory: {screenshots_dir}")
+    else:
+        # Create the directory for future screenshots
+        screenshots_dir.mkdir(parents=True, exist_ok=True)
+        app.mount(
+            "/screenshots/files",
+            StaticFiles(directory=screenshots_dir),
+            name="screenshot_files",
+        )
+        logger.info(f"Created and mounted screenshots directory: {screenshots_dir}")
 
     # Setup templates
     templates = Jinja2Templates(directory=TEMPLATES_DIR)
     app.state.templates = templates
 
     # Import and include routes
-    from captains_log.web.routes import api, dashboard
+    from captains_log.web.routes import analytics, api, dashboard, insights, screenshots
 
     app.include_router(dashboard.router)
+    app.include_router(analytics.router)
+    app.include_router(insights.router)
     app.include_router(api.router, prefix="/api")
+    app.include_router(screenshots.router, prefix="/api")
 
     return app
 

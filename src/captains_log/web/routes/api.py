@@ -234,3 +234,138 @@ async def get_timeline(date: str) -> list[dict[str, Any]]:
         sessions.append(current_session)
 
     return sessions
+
+
+@router.get("/time-analysis/{date}")
+async def get_time_analysis(date: str) -> dict[str, Any]:
+    """Get time analysis data for a specific date."""
+    from captains_log.web.app import get_db
+
+    db = await get_db()
+
+    events = await db.fetch_all(
+        """
+        SELECT timestamp, app_name, bundle_id, window_title, idle_status
+        FROM activity_logs
+        WHERE date(timestamp) = ?
+        ORDER BY timestamp ASC
+        """,
+        (date,)
+    )
+
+    # Calculate time spent per app
+    app_time: dict[str, float] = {}
+    focus_sessions: list[dict] = []
+    context_switches = 0
+    total_tracked_minutes = 0.0
+
+    prev_event = None
+    current_focus_start = None
+    current_focus_app = None
+
+    for event in events:
+        ts = datetime.fromisoformat(event["timestamp"])
+        app = event["app_name"]
+
+        if prev_event:
+            prev_ts = datetime.fromisoformat(prev_event["timestamp"])
+            duration = (ts - prev_ts).total_seconds() / 60
+            duration = min(duration, 15)  # Cap at 15 minutes
+            total_tracked_minutes += duration
+
+            prev_app = prev_event["app_name"]
+            app_time[prev_app] = app_time.get(prev_app, 0) + duration
+
+            if app != prev_app:
+                context_switches += 1
+                if current_focus_start and current_focus_app:
+                    focus_duration = (prev_ts - current_focus_start).total_seconds() / 60
+                    if focus_duration >= 5:
+                        focus_sessions.append({
+                            "app": current_focus_app,
+                            "start": current_focus_start.strftime("%H:%M"),
+                            "duration": round(focus_duration),
+                        })
+                current_focus_start = ts
+                current_focus_app = app
+        else:
+            current_focus_start = ts
+            current_focus_app = app
+
+        prev_event = event
+
+    # Categorize apps
+    categories = {
+        "Communication": ["Slack", "Messages", "Mail", "Microsoft Outlook", "Zoom", "Discord", "Microsoft Teams"],
+        "Development": ["Terminal", "VS Code", "Xcode", "PyCharm", "IntelliJ", "Cursor", "Sublime Text", "iTerm2", "Code"],
+        "Browsing": ["Google Chrome", "Safari", "Firefox", "Arc", "Brave Browser", "Microsoft Edge"],
+        "Productivity": ["Notes", "Notion", "Obsidian", "Bear", "Things", "Reminders", "Calendar"],
+        "Media": ["Spotify", "Music", "YouTube", "Netflix", "Podcasts", "VLC"],
+    }
+
+    category_time: dict[str, float] = {}
+    for app, time_mins in app_time.items():
+        categorized = False
+        for cat, apps_list in categories.items():
+            if app in apps_list:
+                category_time[cat] = category_time.get(cat, 0) + time_mins
+                categorized = True
+                break
+        if not categorized:
+            category_time["Other"] = category_time.get("Other", 0) + time_mins
+
+    # Sort and format
+    sorted_apps = sorted(app_time.items(), key=lambda x: x[1], reverse=True)
+    sorted_categories = sorted(category_time.items(), key=lambda x: x[1], reverse=True)
+    focus_score = max(0, min(100, 100 - (context_switches * 3))) if events else 0
+
+    return {
+        "app_time": [{"app": app, "minutes": round(mins, 1)} for app, mins in sorted_apps[:15]],
+        "category_time": [{"category": cat, "minutes": round(mins, 1)} for cat, mins in sorted_categories],
+        "total_hours": round(total_tracked_minutes / 60, 1),
+        "context_switches": context_switches,
+        "focus_score": focus_score,
+        "focus_sessions": sorted(focus_sessions, key=lambda x: x["duration"], reverse=True)[:10],
+    }
+
+
+@router.get("/apps/all")
+async def get_all_apps() -> dict[str, Any]:
+    """Get all-time app statistics."""
+    from captains_log.web.app import get_db
+
+    db = await get_db()
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # All-time stats
+    app_stats = await db.fetch_all(
+        """
+        SELECT
+            app_name,
+            bundle_id,
+            COUNT(*) as event_count,
+            MIN(timestamp) as first_seen,
+            MAX(timestamp) as last_seen
+        FROM activity_logs
+        GROUP BY bundle_id
+        ORDER BY event_count DESC
+        """
+    )
+
+    # Today's apps
+    today_apps = await db.fetch_all(
+        """
+        SELECT app_name, COUNT(*) as count
+        FROM activity_logs
+        WHERE date(timestamp) = ?
+        GROUP BY app_name
+        ORDER BY count DESC
+        """,
+        (today,)
+    )
+
+    return {
+        "app_stats": [dict(row) for row in app_stats],
+        "today_apps": [dict(row) for row in today_apps],
+        "today": today,
+    }

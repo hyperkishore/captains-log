@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from collections import Counter
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Awaitable
+from typing import Any
 
 from captains_log.ai.batch_processor import BatchProcessor
-from captains_log.ai.schemas import SummaryResponse, ActivityType
 from captains_log.storage.database import Database
 from captains_log.summarizers.focus_calculator import FocusCalculator
 

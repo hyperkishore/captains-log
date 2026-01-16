@@ -28,13 +28,21 @@ BROWSER_BUNDLES = {
 class WindowTracker:
     """Extracts window titles and URLs using Accessibility API."""
 
-    def __init__(self):
+    def __init__(self, daemon_mode: bool = False):
         self._accessibility_available = False
+        self._daemon_mode = daemon_mode
         self._check_accessibility()
 
     def _check_accessibility(self) -> None:
         """Check if accessibility features are available."""
         try:
+            # In daemon mode, skip the ApplicationServices check (it crashes)
+            # Assume accessibility is available; it will fail gracefully if not
+            if self._daemon_mode:
+                logger.info("Running in daemon mode, assuming accessibility available")
+                self._accessibility_available = True
+                return
+
             from ApplicationServices import AXIsProcessTrusted
 
             self._accessibility_available = AXIsProcessTrusted()
@@ -43,6 +51,10 @@ class WindowTracker:
         except ImportError:
             logger.warning("ApplicationServices not available")
             self._accessibility_available = False
+        except Exception as e:
+            logger.warning(f"Error checking accessibility: {e}")
+            # Assume available in daemon mode
+            self._accessibility_available = self._daemon_mode
 
     @property
     def is_available(self) -> bool:
@@ -67,14 +79,14 @@ class WindowTracker:
             return None
 
         try:
-            import Quartz
+            import ctypes
+
             from Quartz import (
-                AXUIElementCreateApplication,
                 AXUIElementCopyAttributeValue,
+                AXUIElementCreateApplication,
                 kAXFocusedWindowAttribute,
                 kAXTitleAttribute,
             )
-            import ctypes
 
             # Create accessibility element for the application
             app_element = AXUIElementCreateApplication(pid)
@@ -124,11 +136,10 @@ class WindowTracker:
             return None
 
         try:
-            from AppKit import NSWorkspace
             from Quartz import (
                 CGWindowListCopyWindowInfo,
-                kCGWindowListOptionOnScreenOnly,
                 kCGNullWindowID,
+                kCGWindowListOptionOnScreenOnly,
             )
 
             # Get all windows
@@ -225,6 +236,66 @@ class WindowTracker:
         domain_pattern = r"^[a-zA-Z0-9][-a-zA-Z0-9]*(\.[a-zA-Z0-9][-a-zA-Z0-9]*)+$"
         return bool(re.match(domain_pattern, text))
 
+    def get_chrome_url(self) -> str | None:
+        """Get URL from Chrome's active tab using AppleScript."""
+        try:
+            import subprocess
+
+            script = '''
+            tell application "Google Chrome"
+                if (count of windows) > 0 then
+                    return URL of active tab of front window
+                end if
+            end tell
+            '''
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+            return None
+        except Exception as e:
+            logger.debug(f"Error getting Chrome URL: {e}")
+            return None
+
+    def get_arc_url(self) -> str | None:
+        """Get URL from Arc browser's active tab using AppleScript."""
+        try:
+            import subprocess
+
+            script = '''
+            tell application "Arc"
+                if (count of windows) > 0 then
+                    return URL of active tab of front window
+                end if
+            end tell
+            '''
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+            return None
+        except Exception as e:
+            logger.debug(f"Error getting Arc URL: {e}")
+            return None
+
+    def get_browser_url(self, bundle_id: str, pid: int) -> str | None:
+        """Get URL from browser using the best available method."""
+        if bundle_id == "com.google.Chrome":
+            return self.get_chrome_url()
+        elif bundle_id == "company.thebrowser.Browser":  # Arc
+            return self.get_arc_url()
+        elif bundle_id == "com.apple.Safari":
+            return self.get_safari_url(pid)
+        return None
+
     def get_safari_url(self, pid: int) -> str | None:
         """Get URL from Safari using accessibility AXDocument attribute.
 
@@ -235,9 +306,10 @@ class WindowTracker:
 
         try:
             import ctypes
+
             from Quartz import (
-                AXUIElementCreateApplication,
                 AXUIElementCopyAttributeValue,
+                AXUIElementCreateApplication,
                 kAXFocusedWindowAttribute,
             )
 
@@ -278,12 +350,12 @@ class WindowTracker:
     def is_fullscreen(self, pid: int) -> bool:
         """Check if the application window is in fullscreen mode."""
         try:
+            from AppKit import NSScreen
             from Quartz import (
                 CGWindowListCopyWindowInfo,
-                kCGWindowListOptionOnScreenOnly,
                 kCGNullWindowID,
+                kCGWindowListOptionOnScreenOnly,
             )
-            from AppKit import NSScreen
 
             window_list = CGWindowListCopyWindowInfo(
                 kCGWindowListOptionOnScreenOnly,

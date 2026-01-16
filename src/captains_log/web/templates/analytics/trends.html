@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trends - Captain's Log</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e8e8e8;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+        /* Navigation */
+        .nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: rgba(255,255,255,0.05);
+            padding: 8px;
+            border-radius: 12px;
+        }
+        .nav a {
+            padding: 10px 20px;
+            color: #a0a0a0;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .nav a:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .nav a.active { background: #3b82f6; color: #fff; }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            background: linear-gradient(90deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header .subtitle { color: #9ca3af; font-size: 16px; }
+
+        /* Cards */
+        .card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .card h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #e8e8e8;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Grid */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        /* Week Comparison */
+        .week-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        .week-stat {
+            text-align: center;
+            padding: 20px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+        }
+        .week-stat .label {
+            font-size: 13px;
+            color: #9ca3af;
+            margin-bottom: 8px;
+        }
+        .week-stat .value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+        .week-stat.this-week .value { color: #60a5fa; }
+        .week-stat.last-week .value { color: #6b7280; }
+        .week-stat .change {
+            margin-top: 8px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .week-stat .change.positive { color: #34d399; }
+        .week-stat .change.negative { color: #f87171; }
+        .week-stat .change.neutral { color: #9ca3af; }
+
+        /* Chart Container */
+        .chart-container {
+            height: 250px;
+            position: relative;
+        }
+
+        /* Heatmap */
+        .heatmap {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+        }
+        .heatmap-cell {
+            aspect-ratio: 1;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #9ca3af;
+            position: relative;
+        }
+        .heatmap-cell.level-0 { background: rgba(255,255,255,0.05); }
+        .heatmap-cell.level-1 { background: rgba(96, 165, 250, 0.2); }
+        .heatmap-cell.level-2 { background: rgba(96, 165, 250, 0.4); }
+        .heatmap-cell.level-3 { background: rgba(96, 165, 250, 0.6); }
+        .heatmap-cell.level-4 { background: rgba(96, 165, 250, 0.8); color: #fff; }
+        .heatmap-cell.level-5 { background: #60a5fa; color: #fff; }
+        .heatmap-cell.today { border: 2px solid #fbbf24; }
+        .heatmap-header {
+            font-size: 11px;
+            color: #6b7280;
+            text-align: center;
+            padding: 4px;
+        }
+        .heatmap-legend {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 4px;
+            margin-top: 12px;
+            font-size: 11px;
+            color: #6b7280;
+        }
+        .heatmap-legend-cell {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        /* Category Trends */
+        .trend-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .trend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 12px;
+        }
+        .trend-dot.development { background: #60a5fa; }
+        .trend-dot.communication { background: #f472b6; }
+        .trend-dot.design { background: #a78bfa; }
+        .trend-dot.meeting { background: #fbbf24; }
+        .trend-dot.productivity { background: #34d399; }
+        .trend-dot.other { background: #6b7280; }
+        .trend-name { flex: 1; font-weight: 500; }
+        .trend-values {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .trend-week {
+            font-size: 13px;
+            color: #9ca3af;
+            width: 60px;
+            text-align: right;
+        }
+        .trend-week.current { color: #60a5fa; font-weight: 600; }
+        .trend-arrow {
+            width: 60px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .trend-arrow.up { color: #34d399; }
+        .trend-arrow.down { color: #f87171; }
+        .trend-arrow.same { color: #6b7280; }
+
+        /* Peak Hours */
+        .peak-hours {
+            display: flex;
+            align-items: flex-end;
+            height: 150px;
+            gap: 4px;
+            padding: 12px 0;
+        }
+        .peak-hour {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        .peak-bar-container {
+            display: flex;
+            gap: 2px;
+            align-items: flex-end;
+            height: 100px;
+        }
+        .peak-bar {
+            width: 12px;
+            border-radius: 2px 2px 0 0;
+            transition: height 0.3s;
+        }
+        .peak-bar.this-week { background: #60a5fa; }
+        .peak-bar.last-week { background: rgba(107, 114, 128, 0.5); }
+        .peak-label {
+            font-size: 10px;
+            color: #6b7280;
+        }
+
+        /* Patterns */
+        .pattern-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            border-left: 3px solid #a78bfa;
+        }
+        .pattern-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(167, 139, 250, 0.2);
+            color: #a78bfa;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            font-size: 16px;
+        }
+        .pattern-content h3 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .pattern-content p {
+            font-size: 13px;
+            color: #9ca3af;
+            line-height: 1.5;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .week-comparison { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="nav">
+            <a href="/analytics">Overview</a>
+            <a href="/analytics/deep-dive">Deep Dive</a>
+            <a href="/analytics/trends" class="active">Trends</a>
+            <a href="/analytics/insights">Insights</a>
+        </nav>
+
+        <!-- Header -->
+        <header class="header">
+            <h1>Trends & Patterns</h1>
+            <p class="subtitle">Comparing this week vs last week</p>
+        </header>
+
+        {% if has_data %}
+        <!-- Week Comparison Summary -->
+        <div class="card">
+            <h2>Week Overview</h2>
+            <div class="week-comparison">
+                <div class="week-stat this-week">
+                    <div class="label">This Week (so far)</div>
+                    <div class="value">{{ this_week_hours }}h</div>
+                    <div class="change {{ total_change_class }}">
+                        {% if total_change > 0 %}+{% endif %}{{ total_change }}% vs last week
+                    </div>
+                </div>
+                <div class="week-stat last-week">
+                    <div class="label">Last Week (same days)</div>
+                    <div class="value">{{ last_week_hours }}h</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <!-- Weekly Activity Chart -->
+            <div class="card">
+                <h2>Daily Activity Comparison</h2>
+                <div class="chart-container">
+                    <canvas id="weeklyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Category Trends -->
+            <div class="card">
+                <h2>Category Trends</h2>
+                {% for trend in category_trends %}
+                <div class="trend-item">
+                    <div class="trend-dot {{ trend.category|lower|replace(' ', '-') }}"></div>
+                    <span class="trend-name">{{ trend.category }}</span>
+                    <div class="trend-values">
+                        <span class="trend-week">{{ trend.last_week_pct }}%</span>
+                        <span class="trend-arrow {{ trend.direction }}">
+                            {% if trend.direction == 'up' %}↑ +{{ trend.change }}%
+                            {% elif trend.direction == 'down' %}↓ {{ trend.change }}%
+                            {% else %}→ 0%
+                            {% endif %}
+                        </span>
+                        <span class="trend-week current">{{ trend.this_week_pct }}%</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <!-- Peak Hours Comparison -->
+            <div class="card">
+                <h2>Peak Hours Comparison</h2>
+                <div class="peak-hours">
+                    {% for hour in peak_hours %}
+                    <div class="peak-hour">
+                        <div class="peak-bar-container">
+                            <div class="peak-bar this-week" style="height: {{ hour.this_week_pct }}%"></div>
+                            <div class="peak-bar last-week" style="height: {{ hour.last_week_pct }}%"></div>
+                        </div>
+                        <span class="peak-label">{{ hour.label }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div style="display: flex; justify-content: center; gap: 24px; margin-top: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9ca3af;">
+                        <div style="width: 12px; height: 12px; background: #60a5fa; border-radius: 2px;"></div>
+                        This week
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9ca3af;">
+                        <div style="width: 12px; height: 12px; background: rgba(107, 114, 128, 0.5); border-radius: 2px;"></div>
+                        Last week
+                    </div>
+                </div>
+            </div>
+
+            <!-- Focus Heatmap -->
+            <div class="card">
+                <h2>Focus Score (Last 4 Weeks)</h2>
+                <div class="heatmap">
+                    <!-- Header row -->
+                    <div class="heatmap-header">Mon</div>
+                    <div class="heatmap-header">Tue</div>
+                    <div class="heatmap-header">Wed</div>
+                    <div class="heatmap-header">Thu</div>
+                    <div class="heatmap-header">Fri</div>
+                    <div class="heatmap-header">Sat</div>
+                    <div class="heatmap-header">Sun</div>
+
+                    {% for cell in heatmap_data %}
+                    <div class="heatmap-cell level-{{ cell.level }}{% if cell.is_today %} today{% endif %}"
+                         title="{{ cell.date }}: Focus {{ cell.score }}">
+                        {{ cell.day }}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="heatmap-legend">
+                    <span>Less</span>
+                    <div class="heatmap-legend-cell level-0"></div>
+                    <div class="heatmap-legend-cell level-1"></div>
+                    <div class="heatmap-legend-cell level-2"></div>
+                    <div class="heatmap-legend-cell level-3"></div>
+                    <div class="heatmap-legend-cell level-4"></div>
+                    <div class="heatmap-legend-cell level-5"></div>
+                    <span>More</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pattern Detection -->
+        <div class="card">
+            <h2>Detected Patterns</h2>
+            {% for pattern in patterns %}
+            <div class="pattern-item">
+                <div class="pattern-icon">{{ pattern.icon }}</div>
+                <div class="pattern-content">
+                    <h3>{{ pattern.title }}</h3>
+                    <p>{{ pattern.description }}</p>
+                </div>
+            </div>
+            {% endfor %}
+            {% if not patterns %}
+            <div class="empty-state">
+                <p>Not enough data to detect patterns yet. Keep tracking!</p>
+            </div>
+            {% endif %}
+        </div>
+
+        {% else %}
+        <!-- Empty State -->
+        <div class="card">
+            <div class="empty-state">
+                <h3>Not enough data for trend analysis</h3>
+                <p>We need at least a few days of activity data to show trends.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        const weeklyData = {{ weekly_chart_data|safe }};
+
+        if (weeklyData && weeklyData.labels) {
+            const ctx = document.getElementById('weeklyChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: weeklyData.labels,
+                    datasets: [
+                        {
+                            label: 'This Week',
+                            data: weeklyData.this_week,
+                            backgroundColor: '#60a5fa',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Last Week',
+                            data: weeklyData.last_week,
+                            backgroundColor: 'rgba(107, 114, 128, 0.5)',
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#9ca3af' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#9ca3af' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#9ca3af' }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

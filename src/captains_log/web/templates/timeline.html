@@ -8,7 +8,7 @@
     <div class="flex justify-between items-center">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">Activity Timeline</h1>
-            <p class="text-gray-500">{{ date }}</p>
+            <p class="text-gray-500">{{ date }}{% if screenshot_count %} · {{ screenshot_count }} screenshots{% endif %}</p>
         </div>
         <div class="flex items-center space-x-2">
             <select id="date-select" class="rounded-lg border-gray-300 text-sm focus:ring-blue-500 focus:border-blue-500" onchange="window.location.href='/timeline?date=' + this.value">
@@ -38,6 +38,16 @@
                     {% endif %}
                     {% if activity.url %}
                     <div class="text-xs text-blue-600 mt-1">{{ activity.url }}</div>
+                    {% endif %}
+                    {% if activity.screenshot %}
+                    <div class="mt-2">
+                        <a href="{{ activity.screenshot.url }}" target="_blank" class="inline-block">
+                            <img src="{{ activity.screenshot.url }}"
+                                 alt="Screenshot at {{ activity.screenshot.timestamp }}"
+                                 loading="lazy"
+                                 class="rounded border border-gray-200 max-h-32 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
+                        </a>
+                    </div>
                     {% endif %}
                 </div>
                 <div class="flex-shrink-0">

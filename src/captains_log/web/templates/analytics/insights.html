@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insights - Captain's Log</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e8e8e8;
+        }
+
+        .container { max-width: 1000px; margin: 0 auto; padding: 24px; }
+
+        /* Navigation */
+        .nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: rgba(255,255,255,0.05);
+            padding: 8px;
+            border-radius: 12px;
+        }
+        .nav a {
+            padding: 10px 20px;
+            color: #a0a0a0;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .nav a:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .nav a.active { background: #3b82f6; color: #fff; }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            background: linear-gradient(90deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header .date { color: #9ca3af; font-size: 16px; }
+
+        /* Cards */
+        .card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .card h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #e8e8e8;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Narrative */
+        .narrative {
+            background: linear-gradient(135deg, rgba(96, 165, 250, 0.1), rgba(167, 139, 250, 0.1));
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(96, 165, 250, 0.2);
+        }
+        .narrative p {
+            font-size: 18px;
+            line-height: 1.7;
+            color: #e8e8e8;
+        }
+        .narrative .vs-avg {
+            margin-top: 16px;
+            font-size: 14px;
+            color: #9ca3af;
+        }
+        .vs-avg .above { color: #34d399; }
+        .vs-avg .below { color: #f87171; }
+        .vs-avg .at { color: #fbbf24; }
+
+        /* Grid */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        /* Wins */
+        .win-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 16px;
+            background: rgba(52, 211, 153, 0.1);
+            border-left: 4px solid #34d399;
+            border-radius: 0 12px 12px 0;
+            margin-bottom: 12px;
+        }
+        .win-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(52, 211, 153, 0.2);
+            color: #34d399;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            font-size: 20px;
+        }
+        .win-content { flex: 1; }
+        .win-content h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .win-content p {
+            font-size: 13px;
+            color: #9ca3af;
+            line-height: 1.5;
+        }
+        .win-metric {
+            background: rgba(52, 211, 153, 0.2);
+            color: #34d399;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        /* Improvements */
+        .improvement-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            margin-bottom: 12px;
+        }
+        .improvement-item.warning {
+            background: rgba(251, 191, 36, 0.1);
+            border-left: 4px solid #fbbf24;
+            border-radius: 0 12px 12px 0;
+        }
+        .improvement-item.info {
+            background: rgba(96, 165, 250, 0.1);
+            border-left: 4px solid #60a5fa;
+            border-radius: 0 12px 12px 0;
+        }
+        .improvement-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-size: 16px;
+        }
+        .improvement-item.warning .improvement-icon {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+        }
+        .improvement-item.info .improvement-icon {
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+        }
+        .improvement-content h3 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .improvement-content p {
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        /* Recommendations */
+        .recommendation-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 20px;
+            background: rgba(167, 139, 250, 0.1);
+            border: 1px solid rgba(167, 139, 250, 0.2);
+            border-radius: 12px;
+            margin-bottom: 12px;
+        }
+        .recommendation-priority {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 16px;
+            margin-top: 6px;
+        }
+        .recommendation-priority.high { background: #f87171; }
+        .recommendation-priority.medium { background: #fbbf24; }
+        .recommendation-priority.low { background: #34d399; }
+        .recommendation-content { flex: 1; }
+        .recommendation-content h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #a78bfa;
+        }
+        .recommendation-content p {
+            font-size: 13px;
+            color: #9ca3af;
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+        .recommendation-action {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            background: rgba(167, 139, 250, 0.2);
+            border-radius: 8px;
+            font-size: 13px;
+            color: #a78bfa;
+            font-weight: 500;
+        }
+        .recommendation-action::before {
+            content: "→";
+            margin-right: 8px;
+        }
+
+        /* Weekly Reflection */
+        .weekly-reflection {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(245, 158, 11, 0.1));
+            border: 1px solid rgba(251, 191, 36, 0.2);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .weekly-reflection h2 {
+            color: #fbbf24;
+            margin-bottom: 16px;
+        }
+        .reflection-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .reflection-stat {
+            text-align: center;
+        }
+        .reflection-stat .value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fbbf24;
+        }
+        .reflection-stat .label {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+        }
+        .empty-state .icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: #9ca3af;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .reflection-stats { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="nav">
+            <a href="/analytics">Overview</a>
+            <a href="/analytics/deep-dive">Deep Dive</a>
+            <a href="/analytics/trends">Trends</a>
+            <a href="/analytics/insights" class="active">Insights</a>
+        </nav>
+
+        <!-- Header -->
+        <header class="header">
+            <h1>Productivity Insights</h1>
+            <p class="date">{{ date_display }}</p>
+        </header>
+
+        {% if has_data %}
+        <!-- Daily Narrative -->
+        <div class="narrative">
+            <p>{{ narrative }}</p>
+            <div class="vs-avg">
+                Your activity is <span class="{{ today_vs_avg }}">{{ today_vs_avg }}</span> your 7-day average ({{ daily_avg }}h/day).
+            </div>
+        </div>
+
+        {% if is_sunday and weekly_reflection %}
+        <!-- Weekly Reflection (Sunday only) -->
+        <div class="weekly-reflection">
+            <h2>Weekly Reflection</h2>
+            <div class="reflection-stats">
+                <div class="reflection-stat">
+                    <div class="value">{{ weekly_reflection.total_hours }}h</div>
+                    <div class="label">Total Hours</div>
+                </div>
+                <div class="reflection-stat">
+                    <div class="value">{{ weekly_reflection.deep_work_hours }}h</div>
+                    <div class="label">Deep Work</div>
+                </div>
+                <div class="reflection-stat">
+                    <div class="value">{{ weekly_reflection.wins }}</div>
+                    <div class="label">Wins</div>
+                </div>
+                <div class="reflection-stat">
+                    <div class="value">{{ weekly_reflection.top_category }}</div>
+                    <div class="label">Top Focus</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="grid-2">
+            <!-- Wins Today -->
+            <div class="card">
+                <h2>Wins Today</h2>
+                {% if wins %}
+                    {% for win in wins %}
+                    <div class="win-item">
+                        <div class="win-icon">✓</div>
+                        <div class="win-content">
+                            <h3>{{ win.title }}</h3>
+                            <p>{{ win.description }}</p>
+                        </div>
+                        {% if win.metric %}
+                        <div class="win-metric">{{ win.metric }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state" style="padding: 40px 20px;">
+                        <p>Keep going! Your wins will appear here as you work.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Areas for Improvement -->
+            <div class="card">
+                <h2>Areas for Improvement</h2>
+                {% if improvements %}
+                    {% for item in improvements %}
+                    <div class="improvement-item {{ item.severity }}">
+                        <div class="improvement-icon">
+                            {% if item.severity == 'warning' %}!{% else %}i{% endif %}
+                        </div>
+                        <div class="improvement-content">
+                            <h3>{{ item.title }}</h3>
+                            <p>{{ item.description }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state" style="padding: 40px 20px;">
+                        <p>Great job! No major areas for improvement today.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div class="card">
+            <h2>Actionable Recommendations</h2>
+            {% for rec in recommendations %}
+            <div class="recommendation-item">
+                <div class="recommendation-priority {{ rec.priority }}"></div>
+                <div class="recommendation-content">
+                    <h3>{{ rec.title }}</h3>
+                    <p>{{ rec.description }}</p>
+                    {% if rec.action %}
+                    <div class="recommendation-action">{{ rec.action }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% else %}
+        <!-- Empty State -->
+        <div class="card">
+            <div class="empty-state">
+                <div class="icon">💡</div>
+                <h3>No insights available yet</h3>
+                <p>Start tracking your activity to receive personalized productivity insights.</p>
+                <p style="margin-top: 12px; font-size: 14px;">Run <code>captains-log start</code> to begin tracking.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

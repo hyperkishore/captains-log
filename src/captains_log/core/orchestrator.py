@@ -8,23 +8,22 @@ import os
 import signal
 import sys
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
+from captains_log.ai.batch_processor import BatchProcessor
 from captains_log.core.config import Config, get_config
 from captains_log.core.permissions import PermissionManager
 from captains_log.storage.database import Database, init_database
+from captains_log.storage.screenshot_manager import ScreenshotManager
+from captains_log.summarizers.five_minute import FiveMinuteSummarizer
+from captains_log.summarizers.focus_calculator import FocusCalculator
 from captains_log.trackers.app_monitor import AppInfo, AppMonitor
 from captains_log.trackers.buffer import ActivityBuffer, ActivityEvent
 from captains_log.trackers.idle_detector import IdleDetector
-from captains_log.trackers.window_tracker import WindowTracker
-from captains_log.trackers.work_context import WorkContextExtractor, WorkContext
 from captains_log.trackers.input_monitor import InputMonitor, InputStats
 from captains_log.trackers.screenshot_capture import ScreenshotCapture, ScreenshotInfo
-from captains_log.storage.screenshot_manager import ScreenshotManager
-from captains_log.ai.batch_processor import BatchProcessor
-from captains_log.summarizers.five_minute import FiveMinuteSummarizer
-from captains_log.summarizers.focus_calculator import FocusCalculator
+from captains_log.trackers.window_tracker import WindowTracker
+from captains_log.trackers.work_context import WorkContext, WorkContextExtractor
 
 if TYPE_CHECKING:
     pass
@@ -676,8 +675,7 @@ async def run_daemon() -> None:
         # Run the CFRunLoop to receive NSWorkspace notifications
         # This is required because NSWorkspace notifications are delivered via the RunLoop
         try:
-            from PyObjCTools import AppHelper
-            from Foundation import NSRunLoop, NSDate
+            from Foundation import NSDate, NSRunLoop
 
             logger.info("Starting CFRunLoop for event processing...")
 
