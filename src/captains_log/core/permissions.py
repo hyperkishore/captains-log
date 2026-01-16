@@ -48,8 +48,9 @@ class PermissionManager:
     # Maximum times to ask for a permission
     MAX_ASK_COUNT = 3
 
-    def __init__(self, db: Database | None = None):
+    def __init__(self, db: Database | None = None, daemon_mode: bool = False):
         self._db = db
+        self._daemon_mode = daemon_mode  # Skip GUI-dependent checks in daemon mode
         self._state_cache: dict[PermissionType, PermissionState] = {}
 
     @property
@@ -108,8 +109,14 @@ class PermissionManager:
         """Check if Accessibility permission is granted.
 
         Uses AXIsProcessTrusted() which is the official API.
+        Note: This can fail in daemon mode without WindowServer connection.
         """
         try:
+            # Skip GUI-dependent checks in daemon mode
+            if self._daemon_mode:
+                logger.info("Running in daemon mode, assuming accessibility granted")
+                return True
+
             from ApplicationServices import AXIsProcessTrusted
             return AXIsProcessTrusted()
         except ImportError:
@@ -117,15 +124,21 @@ class PermissionManager:
             return False
         except Exception as e:
             logger.error(f"Error checking accessibility permission: {e}")
-            return False
+            return True
 
     def check_screen_recording(self) -> bool:
         """Check if Screen Recording permission is granted.
 
         There's no direct API for this. We try to capture a tiny area
         and see if it succeeds.
+        Note: This can fail in daemon mode without WindowServer connection.
         """
         try:
+            # Skip GUI-dependent checks in daemon mode
+            if self._daemon_mode:
+                logger.info("Running in daemon mode, assuming screen recording granted")
+                return True
+
             import Quartz
 
             # Try to capture a 1x1 pixel region
@@ -145,7 +158,7 @@ class PermissionManager:
             return False
         except Exception as e:
             logger.error(f"Error checking screen recording permission: {e}")
-            return False
+            return True
 
     def check(self, perm_type: PermissionType) -> bool:
         """Check a specific permission."""

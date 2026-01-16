@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}Time Analysis - Captain's Log{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Header with date selector -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Time Analysis</h1>
+            <p class="text-gray-500">Where is your time going?</p>
+        </div>
+        <div class="flex items-center space-x-4">
+            <select id="date-select" onchange="window.location.href='/time-analysis?date=' + this.value"
+                    class="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm">
+                {% for d in available_dates %}
+                <option value="{{ d }}" {% if d == date %}selected{% endif %}>{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="card">
+            <div class="stat-value text-blue-600">{{ total_hours }}h</div>
+            <div class="stat-label">Total Tracked</div>
+        </div>
+        <div class="card">
+            <div class="stat-value {% if focus_score >= 70 %}text-green-600{% elif focus_score >= 40 %}text-yellow-600{% else %}text-red-600{% endif %}">
+                {{ focus_score }}%
+            </div>
+            <div class="stat-label">Focus Score</div>
+        </div>
+        <div class="card">
+            <div class="stat-value text-orange-600">{{ context_switches }}</div>
+            <div class="stat-label">Context Switches</div>
+        </div>
+        <div class="card">
+            <div class="stat-value text-purple-600">{{ focus_sessions|length }}</div>
+            <div class="stat-label">Focus Sessions</div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Time by App -->
+        <div class="card">
+            <h3 class="font-semibold text-gray-900 mb-4">Time by App</h3>
+            <div class="space-y-3">
+                {% for app, minutes in app_time %}
+                {% set hours = (minutes / 60)|round(1) %}
+                {% set percent = (minutes / (total_hours * 60) * 100)|round(1) if total_hours > 0 else 0 %}
+                <div class="flex items-center">
+                    <div class="w-32 truncate text-sm font-medium text-gray-700">{{ app }}</div>
+                    <div class="flex-1 mx-4">
+                        <div class="h-4 bg-gray-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-blue-500 rounded-full" style="width: {{ percent }}%"></div>
+                        </div>
+                    </div>
+                    <div class="w-20 text-right text-sm text-gray-600">
+                        {% if minutes >= 60 %}
+                        {{ hours }}h
+                        {% else %}
+                        {{ minutes|round(0)|int }}m
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-gray-500 text-center py-4">No data for this day</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Time by Category -->
+        <div class="card">
+            <h3 class="font-semibold text-gray-900 mb-4">Time by Category</h3>
+            <canvas id="categoryChart" height="250"></canvas>
+
+            <div class="mt-4 space-y-2">
+                {% for cat, minutes in category_time %}
+                {% set hours = (minutes / 60)|round(1) %}
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-700">{{ cat }}</span>
+                    <span class="font-medium">
+                        {% if minutes >= 60 %}{{ hours }}h{% else %}{{ minutes|round(0)|int }}m{% endif %}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Insights & Recommendations -->
+    <div class="card bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+        <h3 class="font-semibold text-gray-900 mb-4">Insights & Recommendations</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <h4 class="text-sm font-medium text-gray-700 mb-2">Top Time Consumers</h4>
+                <ul class="space-y-2">
+                    {% for app, minutes in app_time[:3] %}
+                    <li class="flex items-center text-sm">
+                        <span class="w-2 h-2 bg-red-400 rounded-full mr-2"></span>
+                        <span class="font-medium">{{ app }}</span>
+                        <span class="ml-auto text-gray-600">
+                            {% if minutes >= 60 %}{{ (minutes/60)|round(1) }}h{% else %}{{ minutes|round(0)|int }}m{% endif %}
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="text-sm font-medium text-gray-700 mb-2">To Free Up 50% Time</h4>
+                <ul class="space-y-2 text-sm text-gray-600">
+                    {% if context_switches > 20 %}
+                    <li class="flex items-start">
+                        <span class="text-yellow-500 mr-2">!</span>
+                        High context switching ({{ context_switches }}). Try time-blocking to stay focused.
+                    </li>
+                    {% endif %}
+                    {% for cat, minutes in category_time %}
+                    {% if cat == "Communication" and minutes > 60 %}
+                    <li class="flex items-start">
+                        <span class="text-orange-500 mr-2">!</span>
+                        {{ (minutes/60)|round(1) }}h on communication. Batch Slack/email checks to 3x daily.
+                    </li>
+                    {% endif %}
+                    {% if cat == "Browsing" and minutes > 90 %}
+                    <li class="flex items-start">
+                        <span class="text-red-500 mr-2">!</span>
+                        {{ (minutes/60)|round(1) }}h browsing. Consider website blockers during focus time.
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                    {% if focus_sessions|length < 3 %}
+                    <li class="flex items-start">
+                        <span class="text-blue-500 mr-2">+</span>
+                        Only {{ focus_sessions|length }} deep focus sessions. Aim for 4+ sessions of 25+ mins.
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Focus Sessions -->
+    <div class="card">
+        <h3 class="font-semibold text-gray-900 mb-4">Focus Sessions (5+ mins uninterrupted)</h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Start Time</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">App</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quality</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for session in focus_sessions %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm text-gray-500">{{ session.start }}</td>
+                        <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ session.app }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">{{ session.duration }} min</td>
+                        <td class="px-4 py-3">
+                            {% if session.duration >= 45 %}
+                            <span class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">Deep Work</span>
+                            {% elif session.duration >= 25 %}
+                            <span class="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">Good Focus</span>
+                            {% else %}
+                            <span class="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">Short Sprint</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="px-4 py-8 text-center text-gray-500">
+                            No focus sessions detected. Try to minimize context switching.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Category Pie Chart
+    const categoryData = {{ category_time | tojson }};
+    const colors = {
+        'Communication': '#F59E0B',
+        'Development': '#10B981',
+        'Browsing': '#3B82F6',
+        'Productivity': '#8B5CF6',
+        'Media': '#EC4899',
+        'Other': '#6B7280'
+    };
+
+    new Chart(document.getElementById('categoryChart'), {
+        type: 'doughnut',
+        data: {
+            labels: categoryData.map(c => c[0]),
+            datasets: [{
+                data: categoryData.map(c => Math.round(c[1])),
+                backgroundColor: categoryData.map(c => colors[c[0]] || '#6B7280')
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const mins = context.raw;
+                            if (mins >= 60) {
+                                return context.label + ': ' + (mins/60).toFixed(1) + 'h';
+                            }
+                            return context.label + ': ' + mins + 'm';
+                        }
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

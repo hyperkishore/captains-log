@@ -80,8 +80,8 @@ class IdleDetector:
         try:
             from Quartz import (
                 CGEventSourceSecondsSinceLastEventType,
-                kCGEventSourceStateCombinedSessionState,
                 kCGEventMouseMoved,
+                kCGEventSourceStateCombinedSessionState,
             )
 
             return CGEventSourceSecondsSinceLastEventType(
@@ -97,8 +97,8 @@ class IdleDetector:
         try:
             from Quartz import (
                 CGEventSourceSecondsSinceLastEventType,
-                kCGEventSourceStateCombinedSessionState,
                 kCGEventKeyDown,
+                kCGEventSourceStateCombinedSessionState,
             )
 
             return CGEventSourceSecondsSinceLastEventType(
@@ -198,12 +198,12 @@ class IdleDetector:
         try:
             from Quartz import (
                 CGEventSourceSecondsSinceLastEventType,
-                kCGEventSourceStateCombinedSessionState,
-                kCGEventMouseMoved,
-                kCGEventLeftMouseDown,
-                kCGEventRightMouseDown,
                 kCGEventKeyDown,
+                kCGEventLeftMouseDown,
+                kCGEventMouseMoved,
+                kCGEventRightMouseDown,
                 kCGEventScrollWheel,
+                kCGEventSourceStateCombinedSessionState,
             )
 
             return {

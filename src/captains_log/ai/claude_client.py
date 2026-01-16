@@ -9,11 +9,10 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import anthropic
-from anthropic import AsyncAnthropic, APIError, RateLimitError
+from anthropic import APIError, AsyncAnthropic, RateLimitError
 
 from captains_log.ai.prompts import SUMMARY_SYSTEM_PROMPT, format_five_minute_prompt
-from captains_log.ai.schemas import SummaryResponse, ActivityType
+from captains_log.ai.schemas import ActivityType, SummaryResponse
 
 logger = logging.getLogger(__name__)
 

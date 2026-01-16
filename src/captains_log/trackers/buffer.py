@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -29,6 +29,22 @@ class ActivityEvent:
     is_fullscreen: bool = False
     display_index: int = 0
 
+    # Work context (extracted from URL/title)
+    work_category: str | None = None       # Development, Communication, Meeting, etc.
+    work_service: str | None = None        # github, google-docs, slack, zoom, etc.
+    work_project: str | None = None        # Project/repo name
+    work_document: str | None = None       # Document/file name
+    work_meeting: str | None = None        # Meeting name
+    work_channel: str | None = None        # Slack/Discord channel
+    work_issue_id: str | None = None       # Issue/PR/ticket number
+    work_organization: str | None = None   # GitHub org, Slack workspace
+
+    # Input engagement metrics
+    keystrokes: int = 0
+    mouse_clicks: int = 0
+    scroll_events: int = 0
+    engagement_score: float = 0.0
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for database insertion."""
         return {
@@ -41,6 +57,20 @@ class ActivityEvent:
             "idle_status": self.idle_status,
             "is_fullscreen": self.is_fullscreen,
             "display_index": self.display_index,
+            # Work context
+            "work_category": self.work_category,
+            "work_service": self.work_service,
+            "work_project": self.work_project,
+            "work_document": self.work_document,
+            "work_meeting": self.work_meeting,
+            "work_channel": self.work_channel,
+            "work_issue_id": self.work_issue_id,
+            "work_organization": self.work_organization,
+            # Input metrics
+            "keystrokes": self.keystrokes,
+            "mouse_clicks": self.mouse_clicks,
+            "scroll_events": self.scroll_events,
+            "engagement_score": self.engagement_score,
         }
 
 
@@ -108,13 +138,12 @@ class ActivityBuffer:
             events = self._events.copy()
             self._events.clear()
 
-        # Write to database in a transaction
+        # Write to database
         try:
-            async with self._db.transaction():
-                for event in events:
-                    await self._db.insert("activity_logs", event.to_dict())
+            for event in events:
+                await self._db.insert("activity_logs", event.to_dict())
 
-            logger.debug(f"Flushed {len(events)} events to database")
+            logger.info(f"Flushed {len(events)} events to database")
             return len(events)
 
         except Exception as e:

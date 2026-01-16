@@ -35,6 +35,7 @@
                     </a>
                     <div class="ml-10 flex space-x-2">
                         <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
+                        <a href="/time-analysis" class="nav-link {% if '/time-analysis' in request.url.path %}active{% endif %}">Time Analysis</a>
                         <a href="/timeline" class="nav-link {% if '/timeline' in request.url.path %}active{% endif %}">Timeline</a>
                         <a href="/apps" class="nav-link {% if '/apps' in request.url.path %}active{% endif %}">Apps</a>
                     </div>

@@ -17,7 +17,7 @@ class TrackingConfig(BaseModel):
 
     buffer_flush_seconds: int = Field(default=30, description="Flush buffer to DB interval")
     idle_threshold_seconds: int = Field(default=300, description="Seconds before marking idle")
-    debounce_ms: int = Field(default=500, description="Ignore app focus shorter than this")
+    debounce_ms: int = Field(default=2000, description="Wait this long before recording app switch (filters swipes)")
 
 
 class ScreenshotConfig(BaseModel):
@@ -25,6 +25,7 @@ class ScreenshotConfig(BaseModel):
 
     enabled: bool = True
     interval_minutes: int = Field(default=5, ge=1, le=60)
+    capture_on_app_change: bool = Field(default=True, description="Capture screenshot on app switch")
     quality: int = Field(default=80, ge=1, le=100, description="WebP quality")
     max_width: int = Field(default=1280, description="Downscale Retina to this width")
     retention_days: int = Field(default=7, ge=1)

@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
+from collections.abc import Awaitable, Callable
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Awaitable
+from typing import Any
 
 from captains_log.ai.claude_client import ClaudeClient, get_claude_client
 from captains_log.ai.schemas import SummaryResponse
@@ -286,7 +287,11 @@ class BatchProcessor:
                 "period_end": period_end,
                 "screenshot_id": screenshot_id,
                 "primary_app": summary.primary_app,
-                "activity_type": summary.activity_type.value if hasattr(summary.activity_type, 'value') else str(summary.activity_type),
+                "activity_type": (
+                    summary.activity_type.value
+                    if hasattr(summary.activity_type, "value")
+                    else str(summary.activity_type)
+                ),
                 "focus_score": summary.focus_score,
                 "key_activities": json.dumps(summary.key_activities),
                 "context": summary.context,

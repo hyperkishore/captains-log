@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Dive - Captain's Log</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e8e8e8;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+        /* Navigation */
+        .nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: rgba(255,255,255,0.05);
+            padding: 8px;
+            border-radius: 12px;
+        }
+        .nav a {
+            padding: 10px 20px;
+            color: #a0a0a0;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .nav a:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .nav a.active { background: #3b82f6; color: #fff; }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            background: linear-gradient(90deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header .date { color: #9ca3af; font-size: 16px; }
+
+        /* Cards */
+        .card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .card h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #e8e8e8;
+            margin-bottom: 16px;
+        }
+
+        /* Treemap */
+        #treemap {
+            width: 100%;
+            height: 400px;
+        }
+        .treemap-node {
+            stroke: rgba(255,255,255,0.1);
+            stroke-width: 1px;
+        }
+        .treemap-label {
+            fill: white;
+            font-size: 12px;
+            pointer-events: none;
+        }
+
+        /* Grid */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        /* Category Breakdown */
+        .category-section {
+            margin-bottom: 16px;
+        }
+        .category-header {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 8px;
+        }
+        .category-header:hover { background: rgba(255,255,255,0.08); }
+        .category-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 12px;
+        }
+        .category-dot.development { background: #60a5fa; }
+        .category-dot.communication { background: #f472b6; }
+        .category-dot.design { background: #a78bfa; }
+        .category-dot.meeting { background: #fbbf24; }
+        .category-dot.productivity { background: #34d399; }
+        .category-dot.other { background: #6b7280; }
+        .category-name { flex: 1; font-weight: 500; }
+        .category-percent { color: #9ca3af; margin-right: 12px; }
+        .category-time { font-weight: 600; }
+
+        .category-apps {
+            padding-left: 24px;
+            margin-bottom: 12px;
+        }
+        .app-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-left: 2px solid rgba(255,255,255,0.1);
+            margin-bottom: 4px;
+        }
+        .app-name { flex: 1; color: #d1d5db; font-size: 14px; }
+        .app-count { color: #9ca3af; font-size: 13px; }
+
+        /* Pareto */
+        .pareto-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .pareto-badge {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .pareto-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .pareto-rank {
+            width: 24px;
+            height: 24px;
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 12px;
+        }
+        .pareto-app { flex: 1; font-weight: 500; }
+        .pareto-bar {
+            width: 100px;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin: 0 12px;
+            overflow: hidden;
+        }
+        .pareto-bar-fill {
+            height: 100%;
+            background: #fbbf24;
+            border-radius: 4px;
+        }
+        .pareto-percent { color: #9ca3af; font-size: 13px; width: 50px; text-align: right; }
+
+        .pareto-divider {
+            border-top: 1px dashed rgba(255,255,255,0.2);
+            margin: 16px 0;
+            position: relative;
+        }
+        .pareto-divider-label {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #16213e;
+            padding: 0 12px;
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        .rest-apps { opacity: 0.6; }
+
+        /* Projects */
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        .project-card {
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .project-card h3 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .project-stat {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="nav">
+            <a href="/analytics">Overview</a>
+            <a href="/analytics/deep-dive" class="active">Deep Dive</a>
+            <a href="/analytics/trends">Trends</a>
+            <a href="/analytics/insights">Insights</a>
+        </nav>
+
+        <!-- Header -->
+        <header class="header">
+            <h1>Deep Dive</h1>
+            <p class="date">{{ date_display }} • {{ total_events }} events</p>
+        </header>
+
+        <!-- Treemap -->
+        <div class="card">
+            <h2>Time Allocation Treemap</h2>
+            <div id="treemap"></div>
+        </div>
+
+        <div class="grid-2">
+            <!-- Category Breakdown -->
+            <div class="card">
+                <h2>Category Breakdown</h2>
+                {% for cat in categories %}
+                <div class="category-section">
+                    <div class="category-header">
+                        <div class="category-dot {{ cat.category|lower|replace(' ', '-') }}"></div>
+                        <span class="category-name">{{ cat.category }}</span>
+                        <span class="category-percent">{{ cat.percent }}%</span>
+                        <span class="category-time">~{{ cat.minutes }}m</span>
+                    </div>
+                    <div class="category-apps">
+                        {% for app in cat.top_apps %}
+                        <div class="app-item">
+                            <span class="app-name">{{ app.app }}</span>
+                            <span class="app-count">{{ app.count }} events</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Pareto Analysis -->
+            <div class="card">
+                <div class="pareto-header">
+                    <h2>80/20 Analysis</h2>
+                    <span class="pareto-badge">{{ pareto.ratio }} ratio</span>
+                </div>
+
+                <p style="color: #9ca3af; font-size: 13px; margin-bottom: 16px;">
+                    Top {{ pareto.top_apps|length }} apps account for {{ pareto.top_percent }}% of your time
+                </p>
+
+                {% for app in pareto.top_apps %}
+                <div class="pareto-item">
+                    <div class="pareto-rank">{{ loop.index }}</div>
+                    <span class="pareto-app">{{ app.app }}</span>
+                    <div class="pareto-bar">
+                        <div class="pareto-bar-fill" style="width: {{ app.percent }}%"></div>
+                    </div>
+                    <span class="pareto-percent">{{ app.percent }}%</span>
+                </div>
+                {% endfor %}
+
+                {% if pareto.rest_apps %}
+                <div class="pareto-divider">
+                    <span class="pareto-divider-label">Remaining {{ pareto.rest_apps|length }} apps</span>
+                </div>
+
+                <div class="rest-apps">
+                    {% for app in pareto.rest_apps[:5] %}
+                    <div class="pareto-item">
+                        <span class="pareto-app">{{ app.app }}</span>
+                        <span class="pareto-percent">{{ app.percent }}%</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Projects Grid -->
+        <div class="card">
+            <h2>Projects</h2>
+            <div class="project-grid">
+                {% for proj in projects %}
+                <div class="project-card">
+                    <h3>{{ proj.project }}</h3>
+                    <div class="project-stat">
+                        <span>Time</span>
+                        <span>~{{ proj.minutes }}m</span>
+                    </div>
+                    <div class="project-stat">
+                        <span>Share</span>
+                        <span>{{ proj.percent }}%</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Treemap Visualization
+        const treemapData = {{ treemap_data|safe }};
+
+        const width = document.getElementById('treemap').clientWidth;
+        const height = 400;
+
+        const colors = {
+            'Development': '#60a5fa',
+            'Communication': '#f472b6',
+            'Design': '#a78bfa',
+            'Meeting': '#fbbf24',
+            'Productivity': '#34d399',
+            'Other': '#6b7280'
+        };
+
+        const svg = d3.select('#treemap')
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height);
+
+        const root = d3.hierarchy(treemapData)
+            .sum(d => d.value)
+            .sort((a, b) => b.value - a.value);
+
+        d3.treemap()
+            .size([width, height])
+            .padding(2)
+            (root);
+
+        const nodes = svg.selectAll('g')
+            .data(root.leaves())
+            .join('g')
+            .attr('transform', d => `translate(${d.x0},${d.y0})`);
+
+        nodes.append('rect')
+            .attr('class', 'treemap-node')
+            .attr('width', d => d.x1 - d.x0)
+            .attr('height', d => d.y1 - d.y0)
+            .attr('fill', d => colors[d.parent.data.name] || '#6b7280')
+            .attr('opacity', 0.8);
+
+        nodes.append('text')
+            .attr('class', 'treemap-label')
+            .attr('x', 4)
+            .attr('y', 14)
+            .text(d => {
+                const w = d.x1 - d.x0;
+                if (w > 60) return d.data.name;
+                return '';
+            });
+
+        nodes.append('title')
+            .text(d => `${d.parent.data.name} > ${d.data.name}: ${d.data.value} events`);
+    </script>
+</body>
+</html>

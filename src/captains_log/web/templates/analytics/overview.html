@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - Captain's Log</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e8e8e8;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+        /* Navigation */
+        .nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: rgba(255,255,255,0.05);
+            padding: 8px;
+            border-radius: 12px;
+        }
+        .nav a {
+            padding: 10px 20px;
+            color: #a0a0a0;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .nav a:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .nav a.active { background: #3b82f6; color: #fff; }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            background: linear-gradient(90deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header .date {
+            color: #9ca3af;
+            font-size: 16px;
+        }
+
+        /* Metric Cards */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .metric-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .metric-value {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .metric-label {
+            font-size: 13px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .metric-card.blue .metric-value { color: #60a5fa; }
+        .metric-card.green .metric-value { color: #34d399; }
+        .metric-card.purple .metric-value { color: #a78bfa; }
+        .metric-card.orange .metric-value { color: #fbbf24; }
+
+        /* Grid Layout */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        .grid-2-equal {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        /* Cards */
+        .card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+        }
+        .card h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #e8e8e8;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card h2 .icon { font-size: 18px; }
+
+        /* Time Blocks */
+        .time-block {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 12px;
+        }
+        .time-block .hour {
+            width: 50px;
+            font-size: 12px;
+            color: #9ca3af;
+            text-align: right;
+        }
+        .time-block .bar-container {
+            flex: 1;
+            height: 24px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 4px;
+            display: flex;
+            overflow: hidden;
+        }
+        .time-block .bar {
+            height: 100%;
+            transition: width 0.3s;
+        }
+        .bar.development { background: #60a5fa; }
+        .bar.communication { background: #f472b6; }
+        .bar.design { background: #a78bfa; }
+        .bar.meeting { background: #fbbf24; }
+        .bar.productivity { background: #34d399; }
+        .bar.other { background: #6b7280; }
+
+        /* Category List */
+        .category-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .category-item:last-child { border-bottom: none; }
+        .category-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 12px;
+        }
+        .category-dot.development { background: #60a5fa; }
+        .category-dot.communication { background: #f472b6; }
+        .category-dot.design { background: #a78bfa; }
+        .category-dot.meeting { background: #fbbf24; }
+        .category-dot.productivity { background: #34d399; }
+        .category-dot.other { background: #6b7280; }
+        .category-name { flex: 1; }
+        .category-percent {
+            font-weight: 600;
+            color: #e8e8e8;
+        }
+        .category-time {
+            color: #9ca3af;
+            font-size: 13px;
+            margin-left: 12px;
+        }
+
+        /* Projects */
+        .project-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .project-rank {
+            width: 24px;
+            height: 24px;
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 12px;
+        }
+        .project-name { flex: 1; font-weight: 500; }
+        .project-time { color: #9ca3af; }
+
+        /* Insights */
+        .insight-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .insight-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-size: 14px;
+        }
+        .insight-item.success .insight-icon { background: rgba(52, 211, 153, 0.2); color: #34d399; }
+        .insight-item.warning .insight-icon { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+        .insight-item.info .insight-icon { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
+        .insight-text { color: #d1d5db; font-size: 14px; }
+
+        /* Deep Work Sessions */
+        .session-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            background: rgba(52, 211, 153, 0.1);
+            border-left: 3px solid #34d399;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 8px;
+        }
+        .session-time {
+            color: #9ca3af;
+            font-size: 12px;
+            width: 50px;
+        }
+        .session-app { flex: 1; font-weight: 500; }
+        .session-duration {
+            background: rgba(52, 211, 153, 0.2);
+            color: #34d399;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* Chart Container */
+        .chart-container {
+            height: 200px;
+            position: relative;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+
+        @media (max-width: 1024px) {
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .grid-2, .grid-2-equal { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="nav">
+            <a href="/analytics" class="active">Overview</a>
+            <a href="/analytics/deep-dive">Deep Dive</a>
+            <a href="/analytics/trends">Trends</a>
+            <a href="/analytics/insights">Insights</a>
+        </nav>
+
+        <!-- Header -->
+        <header class="header">
+            <h1>Productivity Analytics</h1>
+            <p class="date">{{ date_display }}</p>
+        </header>
+
+        {% if total_events > 0 %}
+        <!-- Metrics Grid -->
+        <div class="metrics-grid">
+            <div class="metric-card blue">
+                <div class="metric-value">{{ total_hours }}h</div>
+                <div class="metric-label">Total Tracked</div>
+            </div>
+            <div class="metric-card green">
+                <div class="metric-value">{{ deep_work_hours }}h</div>
+                <div class="metric-label">Deep Work</div>
+            </div>
+            <div class="metric-card purple">
+                <div class="metric-value">{{ focus_score }}</div>
+                <div class="metric-label">Focus Score</div>
+            </div>
+            <div class="metric-card orange">
+                <div class="metric-value">{{ pareto_ratio }}</div>
+                <div class="metric-label">80/20 Ratio</div>
+            </div>
+        </div>
+
+        <!-- Time Blocks + Category Breakdown -->
+        <div class="grid-2">
+            <div class="card">
+                <h2><span class="icon">📊</span> Time Blocks</h2>
+                <div id="timeBlocks">
+                    {% for block in time_blocks %}
+                    <div class="time-block">
+                        <span class="hour">{{ block.hour_label }}</span>
+                        <div class="bar-container">
+                            {% for cat, count in block.categories.items() %}
+                            <div class="bar {{ cat|lower|replace(' ', '-') }}"
+                                 style="width: {{ (count / block.total * 100)|round }}%"
+                                 title="{{ cat }}: {{ count }} events"></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><span class="icon">📁</span> Categories</h2>
+                {% for cat in categories %}
+                <div class="category-item">
+                    <div class="category-dot {{ cat.category|lower|replace(' ', '-') }}"></div>
+                    <span class="category-name">{{ cat.category }}</span>
+                    <span class="category-percent">{{ cat.percent }}%</span>
+                    <span class="category-time">~{{ cat.minutes }}m</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Focus Chart + Projects -->
+        <div class="grid-2-equal">
+            <div class="card">
+                <h2><span class="icon">📈</span> Focus Over Time</h2>
+                <div class="chart-container">
+                    <canvas id="focusChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><span class="icon">🎯</span> Top Projects</h2>
+                {% for proj in projects[:5] %}
+                <div class="project-item">
+                    <div class="project-rank">{{ loop.index }}</div>
+                    <span class="project-name">{{ proj.project }}</span>
+                    <span class="project-time">~{{ proj.minutes }}m</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Deep Work + Insights -->
+        <div class="grid-2-equal">
+            <div class="card">
+                <h2><span class="icon">🧘</span> Deep Work Sessions (25+ min)</h2>
+                {% if deep_work_sessions %}
+                    {% for session in deep_work_sessions %}
+                    <div class="session-item">
+                        <span class="session-time">{{ session.start }}</span>
+                        <span class="session-app">{{ session.app }}</span>
+                        <span class="session-duration">{{ session.duration_min }}m</span>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">
+                        <div class="icon">😴</div>
+                        <p>No deep work sessions detected today</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="card">
+                <h2><span class="icon">💡</span> Quick Insights</h2>
+                {% for insight in insights %}
+                <div class="insight-item {{ insight.type }}">
+                    <div class="insight-icon">{{ insight.icon }}</div>
+                    <span class="insight-text">{{ insight.text }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% else %}
+        <!-- Empty State -->
+        <div class="card">
+            <div class="empty-state">
+                <div class="icon">📭</div>
+                <h3>No activity data for this day</h3>
+                <p>Start the daemon to begin tracking: <code>captains-log start</code></p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        // Focus Over Time Chart
+        const focusData = {{ focus_over_time_json|safe }};
+
+        if (focusData.length > 0) {
+            const ctx = document.getElementById('focusChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: focusData.map(d => d.time),
+                    datasets: [{
+                        label: 'Focus Score',
+                        data: focusData.map(d => d.focus_score),
+                        borderColor: '#a78bfa',
+                        backgroundColor: 'rgba(167, 139, 250, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#a78bfa'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#9ca3af' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#9ca3af' }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
