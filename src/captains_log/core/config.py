@@ -80,6 +80,26 @@ class SyncConfig(BaseModel):
     sync_summaries: bool = Field(default=True, description="Sync AI summaries")
 
 
+class FocusConfig(BaseModel):
+    """Focus mode and Pomodoro configuration."""
+
+    enabled: bool = True
+    work_minutes: int = Field(default=25, ge=1, le=120, description="Pomodoro work duration")
+    short_break_minutes: int = Field(default=5, ge=1, le=30, description="Short break duration")
+    long_break_minutes: int = Field(default=15, ge=5, le=60, description="Long break duration")
+    pomodoros_until_long_break: int = Field(default=4, ge=2, le=10)
+    auto_start_breaks: bool = Field(default=True, description="Auto-start breaks after work")
+    auto_start_work: bool = Field(default=False, description="Auto-start work after breaks")
+    tracking_mode: str = Field(
+        default="passive",
+        description="'passive' (always track) or 'strict' (only when timer running)"
+    )
+    show_widget: bool = Field(default=True, description="Show floating focus widget")
+    widget_position: str = Field(default="top-right", description="Widget screen position")
+    gentle_nudges: bool = Field(default=True, description="Show gentle off-goal indicators")
+    default_goal_minutes: int = Field(default=120, ge=15, le=480, description="Default daily goal")
+
+
 class Config(BaseSettings):
     """Main application configuration."""
 
@@ -109,6 +129,7 @@ class Config(BaseSettings):
     aggregation: AggregationConfig = Field(default_factory=AggregationConfig)
     web: WebConfig = Field(default_factory=WebConfig)
     sync: SyncConfig = Field(default_factory=SyncConfig)
+    focus: FocusConfig = Field(default_factory=FocusConfig)
 
     @property
     def db_path(self) -> Path:

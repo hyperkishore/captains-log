@@ -820,6 +820,327 @@ def summaries_process(
     console.print(f"[dim]Estimated cost: ${usage['estimated_cost_usd']:.4f}[/dim]")
 
 
+@app.command()
+def focus(
+    goal: str = typer.Option(
+        None,
+        "--goal",
+        "-g",
+        help="Goal name (e.g., 'Deep work on captains-log')",
+    ),
+    target: int = typer.Option(
+        120,
+        "--target",
+        "-t",
+        help="Target minutes for the goal",
+    ),
+    apps: str = typer.Option(
+        None,
+        "--apps",
+        "-a",
+        help="Comma-separated list of apps to track (e.g., 'VS Code,Terminal')",
+    ),
+    project: str = typer.Option(
+        None,
+        "--project",
+        "-p",
+        help="Project name to track",
+    ),
+    mode: str = typer.Option(
+        "passive",
+        "--mode",
+        "-m",
+        help="Tracking mode: 'passive' (always track) or 'strict' (timer only)",
+    ),
+    no_widget: bool = typer.Option(
+        False,
+        "--no-widget",
+        help="Run without floating widget",
+    ),
+) -> None:
+    """Start a focus session with Pomodoro timer and goal tracking.
+
+    Examples:
+        captains-log focus -g "Deep work" -t 120 -a "VS Code,Terminal"
+        captains-log focus -g "Writing docs" -p "captains-log"
+        captains-log focus  # Interactive mode
+    """
+    config = get_config()
+
+    # Interactive mode if no goal specified
+    if not goal:
+        from rich.prompt import Prompt, IntPrompt
+
+        console.print("[bold]Focus Mode Setup[/bold]\n")
+
+        goal = Prompt.ask("Goal name", default="Deep work")
+        target = IntPrompt.ask("Target minutes", default=120)
+
+        app_input = Prompt.ask("Apps to track (comma-separated)", default="VS Code,Terminal")
+        apps = app_input if app_input else None
+
+        project = Prompt.ask("Project name (optional)", default="")
+        if not project:
+            project = None
+
+    console.print(f"\n[green]Starting focus session:[/green] {goal}")
+    console.print(f"  Target: {target} minutes")
+    if apps:
+        console.print(f"  Apps: {apps}")
+    if project:
+        console.print(f"  Project: {project}")
+    console.print(f"  Mode: {mode}")
+    console.print(f"  Widget: {'disabled' if no_widget else 'enabled'}\n")
+
+    async def run_focus():
+        from captains_log.focus.activity_matcher import MatchCriteria
+        from captains_log.storage.database import Database
+        from captains_log.widget.widget_controller import WidgetController
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            # Build match criteria
+            criteria = MatchCriteria()
+            if apps:
+                criteria.apps = [a.strip() for a in apps.split(",")]
+            if project:
+                criteria.projects = [project]
+
+            # Create controller
+            controller = WidgetController(db=db, config=config.focus)
+
+            # Start focus session
+            session = await controller.start_focus(
+                goal_name=goal,
+                target_minutes=target,
+                match_criteria=criteria,
+                tracking_mode=mode,
+                show_widget=not no_widget,
+            )
+
+            console.print("[green]Focus session started![/green]")
+            console.print("Press Ctrl+C to stop\n")
+
+            # Start the timer
+            await controller.resume_timer()
+
+            # Run until stopped
+            try:
+                from Foundation import NSDate, NSRunLoop
+
+                while controller.is_active:
+                    # Process macOS events
+                    NSRunLoop.currentRunLoop().runUntilDate_(
+                        NSDate.dateWithTimeIntervalSinceNow_(0.5)
+                    )
+                    await asyncio.sleep(0.1)
+
+                    # Show status periodically
+                    if controller.timer_state:
+                        status = controller.get_status()
+                        timer_info = status.get("timer", {})
+                        session_info = status.get("session", {})
+
+                        # Simple status line (overwrite)
+                        sys.stdout.write(
+                            f"\r🍅 {timer_info.get('time_remaining', '--:--')} | "
+                            f"Progress: {session_info.get('progress_text', '--')} "
+                            f"({session_info.get('progress_percent', 0):.0f}%)    "
+                        )
+                        sys.stdout.flush()
+
+            except ImportError:
+                # No PyObjC RunLoop, just use asyncio
+                while controller.is_active:
+                    await asyncio.sleep(1)
+
+        except KeyboardInterrupt:
+            console.print("\n\n[yellow]Stopping focus session...[/yellow]")
+        finally:
+            if controller.is_active:
+                session = await controller.stop_focus()
+                if session:
+                    console.print(f"\n[bold]Session Summary:[/bold]")
+                    console.print(f"  Total focus time: {session.format_progress()}")
+                    console.print(f"  Pomodoros completed: {session.pomodoro_count}")
+                    console.print(f"  Goal completed: {'Yes' if session.completed else 'No'}")
+            await db.close()
+
+    try:
+        asyncio.run(run_focus())
+    except KeyboardInterrupt:
+        pass
+
+
+@app.command(name="focus-status")
+def focus_status() -> None:
+    """Show current focus session status."""
+    config = get_config()
+
+    async def get_focus_status():
+        from captains_log.storage.database import Database
+        from datetime import date
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            today = date.today().isoformat()
+
+            # Get today's sessions
+            sessions = await db.fetch_all(
+                """SELECT fs.*, fg.name as goal_name, fg.target_minutes
+                   FROM focus_sessions fs
+                   JOIN focus_goals fg ON fs.goal_id = fg.id
+                   WHERE fs.date = ?
+                   ORDER BY fs.created_at DESC""",
+                (today,)
+            )
+
+            # Get active goals
+            goals = await db.fetch_all(
+                "SELECT * FROM focus_goals WHERE is_active = 1 ORDER BY created_at DESC"
+            )
+
+            return sessions, goals
+
+        finally:
+            await db.close()
+
+    try:
+        sessions, goals = asyncio.run(get_focus_status())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    console.print(Panel("[bold]Focus Mode Status[/bold]", border_style="blue"))
+
+    # Today's sessions
+    if sessions:
+        table = Table(title="Today's Sessions", show_header=True, header_style="bold cyan")
+        table.add_column("Goal")
+        table.add_column("Progress")
+        table.add_column("Pomodoros")
+        table.add_column("Status")
+
+        for s in sessions:
+            progress = f"{s['total_focus_minutes']:.0f}m / {s['target_minutes']}m"
+            pct = (s['total_focus_minutes'] / s['target_minutes'] * 100) if s['target_minutes'] > 0 else 0
+            progress += f" ({pct:.0f}%)"
+
+            status = "[green]Complete[/green]" if s['completed'] else "[yellow]In Progress[/yellow]"
+
+            table.add_row(
+                s['goal_name'],
+                progress,
+                f"🍅 {s['pomodoro_count']}",
+                status
+            )
+
+        console.print(table)
+    else:
+        console.print("[dim]No focus sessions today[/dim]")
+
+    console.print()
+
+    # Active goals
+    if goals:
+        console.print("[bold]Active Goals:[/bold]")
+        for g in goals[:5]:
+            console.print(f"  • {g['name']} ({g['target_minutes']} min)")
+    else:
+        console.print("[dim]No active goals[/dim]")
+
+    console.print("\n[dim]Use 'captains-log focus -g \"Goal name\"' to start a focus session[/dim]")
+
+
+@app.command(name="focus-goals")
+def focus_goals(
+    create: str = typer.Option(None, "--create", "-c", help="Create a new goal"),
+    target: int = typer.Option(120, "--target", "-t", help="Target minutes for new goal"),
+    apps: str = typer.Option(None, "--apps", "-a", help="Apps to track for new goal"),
+    delete: int = typer.Option(None, "--delete", "-d", help="Delete goal by ID"),
+) -> None:
+    """Manage focus goals."""
+    config = get_config()
+
+    async def manage_goals():
+        from captains_log.storage.database import Database
+        from captains_log.focus.goal_tracker import GoalTracker, FocusGoal, GoalType
+        from captains_log.focus.activity_matcher import MatchCriteria
+        import json
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            tracker = GoalTracker(db)
+
+            if create:
+                # Create new goal
+                criteria = MatchCriteria()
+                if apps:
+                    criteria.apps = [a.strip() for a in apps.split(",")]
+
+                goal = FocusGoal(
+                    name=create,
+                    goal_type=GoalType.APP_BASED,
+                    target_minutes=target,
+                    match_criteria=criteria,
+                )
+                goal = await tracker.create_goal(goal)
+                console.print(f"[green]Created goal #{goal.id}: {goal.name}[/green]")
+                return
+
+            if delete:
+                # Delete goal
+                await tracker.delete_goal(delete)
+                console.print(f"[yellow]Deleted goal #{delete}[/yellow]")
+                return
+
+            # List goals
+            goals = await tracker.list_goals(active_only=False)
+
+            if not goals:
+                console.print("[dim]No goals found. Create one with --create[/dim]")
+                return
+
+            table = Table(title="Focus Goals", show_header=True, header_style="bold cyan")
+            table.add_column("ID")
+            table.add_column("Name")
+            table.add_column("Target")
+            table.add_column("Apps")
+            table.add_column("Status")
+
+            for g in goals:
+                apps_str = ", ".join(g.match_criteria.apps[:3]) if g.match_criteria.apps else "-"
+                if g.match_criteria.apps and len(g.match_criteria.apps) > 3:
+                    apps_str += f" +{len(g.match_criteria.apps) - 3}"
+
+                status = "[green]Active[/green]" if g.is_active else "[dim]Inactive[/dim]"
+
+                table.add_row(
+                    str(g.id),
+                    g.name,
+                    f"{g.target_minutes}m",
+                    apps_str,
+                    status
+                )
+
+            console.print(table)
+
+        finally:
+            await db.close()
+
+    try:
+        asyncio.run(manage_goals())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+
 @app.callback()
 def main_callback() -> None:
     """Captain's Log - Personal activity tracking with AI-powered insights."""

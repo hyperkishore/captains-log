@@ -17,7 +17,7 @@ import aiosqlite
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Database schema
 SCHEMA = """
@@ -189,6 +189,51 @@ CREATE TABLE IF NOT EXISTS error_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_error_ts ON error_log(timestamp);
+
+-- Focus goals for productivity tracking
+CREATE TABLE IF NOT EXISTS focus_goals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    goal_type TEXT NOT NULL DEFAULT 'app_based',
+    target_minutes INTEGER NOT NULL DEFAULT 120,
+    match_criteria JSON,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_focus_goals_active ON focus_goals(is_active);
+
+-- Focus sessions tracking progress toward goals
+CREATE TABLE IF NOT EXISTS focus_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id INTEGER REFERENCES focus_goals(id),
+    date DATE NOT NULL,
+    pomodoro_count INTEGER DEFAULT 0,
+    total_focus_minutes REAL DEFAULT 0,
+    total_break_minutes REAL DEFAULT 0,
+    off_goal_minutes REAL DEFAULT 0,
+    completed BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_focus_sessions_date ON focus_sessions(date);
+CREATE INDEX IF NOT EXISTS idx_focus_sessions_goal ON focus_sessions(goal_id);
+
+-- Pomodoro history for detailed tracking
+CREATE TABLE IF NOT EXISTS pomodoro_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER REFERENCES focus_sessions(id),
+    started_at DATETIME NOT NULL,
+    ended_at DATETIME,
+    duration_minutes REAL,
+    was_completed BOOLEAN DEFAULT FALSE,
+    interruption_count INTEGER DEFAULT 0,
+    primary_app TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_pomodoro_session ON pomodoro_history(session_id);
+CREATE INDEX IF NOT EXISTS idx_pomodoro_started ON pomodoro_history(started_at);
 """
 
 
@@ -381,6 +426,70 @@ class Database:
                 pass
 
             logger.info("Migration v3 -> v4 complete")
+
+        # Migration from version 4 to 5: Add focus tracking tables
+        if from_version < 5:
+            logger.info("Running migration v4 -> v5: Adding focus tracking tables")
+
+            # Create focus_goals table if not exists
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS focus_goals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    goal_type TEXT NOT NULL DEFAULT 'app_based',
+                    target_minutes INTEGER NOT NULL DEFAULT 120,
+                    match_criteria JSON,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_focus_goals_active ON focus_goals(is_active)"
+            )
+
+            # Create focus_sessions table if not exists
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS focus_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    goal_id INTEGER REFERENCES focus_goals(id),
+                    date DATE NOT NULL,
+                    pomodoro_count INTEGER DEFAULT 0,
+                    total_focus_minutes REAL DEFAULT 0,
+                    total_break_minutes REAL DEFAULT 0,
+                    off_goal_minutes REAL DEFAULT 0,
+                    completed BOOLEAN DEFAULT FALSE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_focus_sessions_date ON focus_sessions(date)"
+            )
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_focus_sessions_goal ON focus_sessions(goal_id)"
+            )
+
+            # Create pomodoro_history table if not exists
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS pomodoro_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER REFERENCES focus_sessions(id),
+                    started_at DATETIME NOT NULL,
+                    ended_at DATETIME,
+                    duration_minutes REAL,
+                    was_completed BOOLEAN DEFAULT FALSE,
+                    interruption_count INTEGER DEFAULT 0,
+                    primary_app TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_pomodoro_session ON pomodoro_history(session_id)"
+            )
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_pomodoro_started ON pomodoro_history(started_at)"
+            )
+
+            logger.info("Migration v4 -> v5 complete")
 
     async def close(self) -> None:
         """Close database connection."""
