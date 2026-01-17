@@ -226,7 +226,7 @@ export interface WorkAnalysis {
 }
 
 export async function analyzeScreenshot(screenshotId: number): Promise<ScreenshotAnalysis> {
-  const res = await fetch(`${API_BASE}/api/screenshots/analyze/${screenshotId}`, {
+  const res = await fetch(`${LOCAL_API}/api/screenshots/analyze/${screenshotId}`, {
     method: 'POST',
   });
   if (!res.ok) {
@@ -236,7 +236,7 @@ export async function analyzeScreenshot(screenshotId: number): Promise<Screensho
 }
 
 export async function analyzeScreenshotDeep(screenshotId: number): Promise<WorkAnalysis> {
-  const res = await fetch(`${API_BASE}/api/screenshots/analyze-deep/${screenshotId}`, {
+  const res = await fetch(`${LOCAL_API}/api/screenshots/analyze-deep/${screenshotId}`, {
     method: 'POST',
   });
   if (!res.ok) {
