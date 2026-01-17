@@ -79,6 +79,49 @@ sqlite3 "$DB_PATH" "
 done
 
 echo "---"
+
+# Focus Mode Section
+echo "Focus Mode | color=#666666 size=11"
+
+# Check for active focus session today
+FOCUS_SESSION=$(sqlite3 "$DB_PATH" "
+    SELECT fg.name, fs.total_focus_minutes, fg.target_minutes, fs.pomodoro_count, fs.completed
+    FROM focus_sessions fs
+    JOIN focus_goals fg ON fs.goal_id = fg.id
+    WHERE fs.date = '$TODAY'
+    ORDER BY fs.created_at DESC
+    LIMIT 1
+" 2>/dev/null)
+
+if [ -n "$FOCUS_SESSION" ]; then
+    IFS='|' read -r GOAL_NAME FOCUS_MINS TARGET_MINS POMODOROS COMPLETED <<< "$FOCUS_SESSION"
+    FOCUS_MINS=${FOCUS_MINS%.*}  # Remove decimal
+    PROGRESS=$((FOCUS_MINS * 100 / TARGET_MINS))
+
+    if [ "$COMPLETED" = "1" ]; then
+        echo "🎉 $GOAL_NAME COMPLETE! | color=green font=SFMono-Regular"
+    else
+        echo "🍅 $GOAL_NAME | font=SFMono-Regular"
+        echo "   ${FOCUS_MINS}m / ${TARGET_MINS}m ($PROGRESS%) | font=SFMono-Regular color=#888888"
+    fi
+    echo "   Pomodoros: $POMODOROS | font=SFMono-Regular color=#888888"
+else
+    echo "No focus session today | color=#888888 font=SFMono-Regular"
+fi
+
+echo "---"
+
+# Focus Quick Actions
+echo "Start Focus Session"
+echo "--🎯 Deep Work (2h) | bash='$VENV_PATH/bin/captains-log' param1=focus param2=-g param3='Deep Work' param4=-t param5=120 param6=-a param7='VS Code,Terminal,Cursor' terminal=true"
+echo "--📝 Writing (1h) | bash='$VENV_PATH/bin/captains-log' param1=focus param2=-g param3='Writing' param4=-t param5=60 param6=-a param7='Notion,Obsidian,Google Docs' terminal=true"
+echo "--💬 Communication (30m) | bash='$VENV_PATH/bin/captains-log' param1=focus param2=-g param3='Communication' param4=-t param5=30 param6=-a param7='Slack,Mail,Messages' terminal=true"
+echo "--⚙️ Custom... | bash='$VENV_PATH/bin/captains-log' param1=focus terminal=true"
+
+echo "Focus Status | bash='$VENV_PATH/bin/captains-log' param1=focus-status terminal=true"
+echo "Manage Goals | bash='$VENV_PATH/bin/captains-log' param1=focus-goals terminal=true"
+
+echo "---"
 echo "Open Dashboard | href=$DASHBOARD_URL"
 echo "---"
 echo "Status"
