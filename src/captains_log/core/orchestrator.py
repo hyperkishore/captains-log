@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from captains_log.ai.batch_processor import BatchProcessor
 from captains_log.core.config import Config, get_config
+from captains_log.sync.cloud_sync import CloudSync
 from captains_log.core.permissions import PermissionManager
 from captains_log.storage.database import Database, init_database
 from captains_log.storage.screenshot_manager import ScreenshotManager
@@ -59,6 +60,9 @@ class Orchestrator:
         self.batch_processor: BatchProcessor | None = None
         self.summarizer: FiveMinuteSummarizer | None = None
         self.focus_calculator: FocusCalculator | None = None
+
+        # Cloud sync
+        self.cloud_sync: CloudSync | None = None
 
         # Current input stats (accumulated between app switches)
         self._current_input_stats: InputStats | None = None
@@ -263,6 +267,16 @@ class Orchestrator:
                     self.batch_processor = None
                     self.summarizer = None
 
+            # Initialize cloud sync (optional)
+            if self.config.sync.enabled:
+                try:
+                    self.cloud_sync = CloudSync(self.config)
+                    await self.cloud_sync.start()
+                    logger.info(f"Cloud sync started (device: {self.config.device_id[:8]}...)")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize cloud sync: {e}")
+                    self.cloud_sync = None
+
             logger.info("Captain's Log daemon started successfully")
 
         except Exception as e:
@@ -278,6 +292,11 @@ class Orchestrator:
         logger.info("Stopping Captain's Log daemon...")
 
         self._running = False
+
+        # Stop cloud sync
+        if self.cloud_sync:
+            await self.cloud_sync.stop()
+            self.cloud_sync = None
 
         # Stop AI summarization
         if self.summarizer:
@@ -649,6 +668,10 @@ class Orchestrator:
                 health["summary_queue"] = queue_stats
             except Exception as e:
                 health["summary_queue"] = {"error": str(e)}
+
+        # Cloud sync status
+        if self.cloud_sync:
+            health["cloud_sync"] = self.cloud_sync.status
 
         return health
 
