@@ -87,25 +87,41 @@ class WidgetController:
             logger.warning("Focus session already active, stopping first")
             await self.stop_focus()
 
-        # Create goal
-        from captains_log.focus.goal_tracker import GoalType
-        goal = FocusGoal(
-            name=goal_name,
-            goal_type=GoalType(goal_type),
-            target_minutes=target_minutes,
-            match_criteria=match_criteria or MatchCriteria(),
-        )
-
-        # Persist goal if database available
+        # Initialize tracker
         if self.db:
             self._tracker = GoalTracker(self.db)
-            goal = await self._tracker.create_goal(goal)
-
-            # Get streak info
-            streak_info = await self._tracker.get_streak(goal.id)
-            self._streak_days = streak_info.get("current_streak", 0)
         else:
             self._tracker = GoalTracker()
+
+        # Try to find existing goal by name first
+        from captains_log.focus.goal_tracker import GoalType
+        goal = None
+
+        if self.db:
+            existing_goals = await self._tracker.list_goals(active_only=True)
+            for g in existing_goals:
+                if g.name.lower() == goal_name.lower():
+                    goal = g
+                    logger.info(f"Reusing existing goal: {goal.name} (ID: {goal.id})")
+                    break
+
+        # Create new goal if not found
+        if goal is None:
+            goal = FocusGoal(
+                name=goal_name,
+                goal_type=GoalType(goal_type),
+                target_minutes=target_minutes,
+                match_criteria=match_criteria or MatchCriteria(),
+            )
+
+            if self.db:
+                goal = await self._tracker.create_goal(goal)
+                logger.info(f"Created new goal: {goal.name} (ID: {goal.id})")
+
+        # Get streak info
+        if self.db and goal.id:
+            streak_info = await self._tracker.get_streak(goal.id)
+            self._streak_days = streak_info.get("current_streak", 0)
 
         # Set tracking mode
         self._tracker.set_tracking_mode(tracking_mode)
@@ -164,9 +180,12 @@ class WidgetController:
             await self._timer.pause()
             self._timer = None
 
-        # Stop tracking
+        # Save and stop tracking
         if self._tracker:
             session = self._tracker.current_session
+            # Explicitly save session before clearing
+            if self.db and session:
+                await self._tracker._save_session()
             await self._tracker.clear_active_goal()
             self._tracker = None
 
@@ -250,7 +269,30 @@ class WidgetController:
 
     def _on_timer_tick(self, timer_state) -> None:
         """Handle timer tick event."""
+        # Track time automatically when timer is running (for CLI mode without orchestrator)
+        # Only during work phase, add 1 second (1/60 minute) to focus time
+        if (timer_state.is_running and
+            timer_state.phase == TimerPhase.WORK and
+            self._tracker and
+            self._tracker.current_session):
+            # Add 1 second of focus time (converted to minutes)
+            self._tracker.current_session.total_focus_minutes += 1 / 60
+
+            # Save to database every 10 seconds
+            elapsed = timer_state.total_work_seconds
+            if elapsed > 0 and elapsed % 10 == 0 and self.db:
+                # Schedule async save (don't block the tick)
+                asyncio.create_task(self._save_session_async())
+
         self._update_widget()
+
+    async def _save_session_async(self) -> None:
+        """Save session to database asynchronously."""
+        if self._tracker:
+            try:
+                await self._tracker._save_session()
+            except Exception as e:
+                logger.error(f"Failed to save session: {e}")
 
     async def _on_phase_complete(self, phase: TimerPhase) -> None:
         """Handle timer phase completion."""
