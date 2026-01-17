@@ -1,6 +1,7 @@
 {
   "name": "captains-log-frontend",
   "version": "0.2.0",
+  "description": "Captain's Log Dashboard - Personal Activity Tracking",
   "private": true,
   "scripts": {
     "dev": "next dev",
