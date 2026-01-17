@@ -17,7 +17,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="Captain's Log Cloud API",
     description="Cloud sync and data serving for Captain's Log activity tracker",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 # CORS for frontend
