@@ -335,7 +335,26 @@ bash "/Users/kishore/Library/Application Support/SwiftBar/Plugins/captains-log.1
 - **Graceful degradation**: Features should fail gracefully if permissions are denied
 - **Local-first**: Raw data stays local, only summaries sync to cloud
 
-### 4. Testing Changes
+### 4. Version Synchronization (CRITICAL)
+**ALWAYS keep version numbers in sync across ALL components when making changes:**
+
+| Component | File | Version Field |
+|-----------|------|---------------|
+| Main Package | `pyproject.toml` | `version = "X.Y.Z"` |
+| Frontend | `frontend/package.json` | `"version": "X.Y.Z"` |
+| Frontend API | `frontend/src/lib/api.ts` | `API_VERSION = 'X.Y.Z'` |
+| Backend API | `backend/main.py` | `version="X.Y.Z"` |
+| SwiftBar Plugin | `scripts/captains-log.1m.sh` | `VERSION="X.Y.Z"` |
+| VERSION file | `VERSION` | `X.Y.Z` |
+
+**When to bump version:**
+- Major (X): Breaking changes, major features
+- Minor (Y): New features, significant improvements
+- Patch (Z): Bug fixes, small changes
+
+**Current Version: 0.2.0**
+
+### 5. Testing Changes
 ```bash
 # Restart daemon to apply changes
 .venv/bin/python -m captains_log stop && .venv/bin/python -m captains_log start

@@ -1,4 +1,7 @@
 // API Client for Captain's Log
+// Version: 0.2.0
+export const API_VERSION = '0.2.0';
+
 import type {
   Activity,
   TimeBlock,
@@ -88,11 +91,21 @@ async function fetchAPI<T>(endpoint: string): Promise<T> {
     url = `${LOCAL_API}${endpoint}`;
   }
 
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
+  console.log(`[Captain's Log] Fetching: ${url}`);
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.error(`[Captain's Log] API error: ${res.status} ${res.statusText} for ${url}`);
+      throw new Error(`API error: ${res.status} ${res.statusText}`);
+    }
+    const data = await res.json();
+    console.log(`[Captain's Log] Success: ${endpoint}`, data);
+    return data;
+  } catch (error) {
+    console.error(`[Captain's Log] Fetch failed for ${url}:`, error);
+    throw error;
   }
-  return res.json();
 }
 
 // Health check

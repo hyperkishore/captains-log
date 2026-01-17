@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # <xbar.title>Captain's Log</xbar.title>
-# <xbar.version>v1.0</xbar.version>
+# <xbar.version>v0.2.0</xbar.version>
 # <xbar.author>Captain's Log</xbar.author>
 # <xbar.author.github>hyperkishore</xbar.author.github>
 # <xbar.desc>Shows activity tracking stats from Captain's Log</xbar.desc>
@@ -12,9 +12,10 @@
 # <swiftbar.hideDisablePlugin>true</swiftbar.hideDisablePlugin>
 # <swiftbar.hideSwiftBar>true</swiftbar.hideSwiftBar>
 
+VERSION="0.2.0"
 DB_PATH="$HOME/Library/Application Support/CaptainsLog/captains_log.db"
 VENV_PATH="$HOME/Desktop/Claude-experiments/captains-log/.venv"
-DASHBOARD_URL="http://127.0.0.1:8080"
+DASHBOARD_URL="http://127.0.0.1:8082"
 
 # Check if database exists
 if [ ! -f "$DB_PATH" ]; then
@@ -53,7 +54,7 @@ else
 fi
 
 echo "---"
-echo "Captain's Log | size=14"
+echo "Captain's Log v$VERSION | size=14"
 echo "---"
 echo "Today's Stats | color=#666666 size=11"
 echo "📊 $TOTAL_TODAY events | font=SFMono-Regular"

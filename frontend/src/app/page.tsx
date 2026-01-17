@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Header } from '@/components/layout/Header';
 import { MetricCard } from '@/components/dashboard/MetricCard';
-import { getStats, getTimeBlocks, getPareto, getDailyInsights, getDeviceId, isCloudMode } from '@/lib/api';
+import { getStats, getTimeBlocks, getPareto, getDailyInsights, getDeviceId, isCloudMode, getApiBase, API_VERSION } from '@/lib/api';
 import type { DailyStats, TimeBlock, ParetoAnalysis, Insights } from '@/lib/types';
 import { Activity, Clock, Zap, Target, Brain, AlertCircle, Cloud, Share2, Copy, Check } from 'lucide-react';
 
@@ -98,6 +98,11 @@ export default function Dashboard() {
     const id = getDeviceId();
     setDeviceId(id);
     setCloudMode(isCloudMode());
+    // Debug logging
+    console.log('[Captain\'s Log] Version:', API_VERSION);
+    console.log('[Captain\'s Log] Device ID:', id);
+    console.log('[Captain\'s Log] Cloud Mode:', isCloudMode());
+    console.log('[Captain\'s Log] API Base:', getApiBase());
   }, []);
 
   // Generate share URL
@@ -207,15 +212,21 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="font-semibold text-purple-300">Demo Mode</p>
-                <p className="text-sm text-slate-400">Showing sample data. Install locally to track your activity.</p>
+                <p className="text-sm text-slate-400">
+                  {cloudMode
+                    ? `Unable to load cloud data. Check console for details. (v${API_VERSION})`
+                    : 'Showing sample data. Install locally to track your activity.'}
+                </p>
               </div>
             </div>
-            <a
-              href="/setup.html"
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium transition-colors"
-            >
-              Install Now
-            </a>
+            {!cloudMode && (
+              <a
+                href="/setup.html"
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium transition-colors"
+              >
+                Install Now
+              </a>
+            )}
           </div>
         )}
 
