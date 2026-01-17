@@ -492,3 +492,123 @@ summarization:
   "tags": ["captains-log", "python", "anthropic"]
 }
 ```
+
+### 2026-01-17: Focus Timer Widget MVP Implementation
+
+**Completed**:
+- Implemented Focus Timer Widget with Pomodoro timer and goal-based activity tracking
+- Created floating macOS overlay widget using PyObjC
+- Added database schema for focus goals, sessions, and pomodoro history
+- Implemented activity matcher for flexible goal criteria (app-based, project-based)
+- Added CLI commands for focus mode management
+
+**Files Created**:
+- `src/captains_log/focus/__init__.py` - Focus module exports
+- `src/captains_log/focus/pomodoro.py` - Pomodoro timer state machine with callbacks
+- `src/captains_log/focus/activity_matcher.py` - Activity matching against goal criteria
+- `src/captains_log/focus/goal_tracker.py` - Goal and session tracking with streaks
+- `src/captains_log/widget/__init__.py` - Widget module exports
+- `src/captains_log/widget/focus_widget.py` - PyObjC floating overlay window
+- `src/captains_log/widget/widget_controller.py` - Controller coordinating timer, tracker, and widget
+
+**Files Modified**:
+- `src/captains_log/storage/database.py` - Added focus_goals, focus_sessions, pomodoro_history tables (schema v5)
+- `src/captains_log/core/config.py` - Added FocusConfig with Pomodoro settings
+- `src/captains_log/cli/main.py` - Added `focus`, `focus-status`, `focus-goals` commands
+
+**Key Features**:
+- **Pomodoro Timer**: 25/5/15 minute cycles with auto-start options
+- **Goal Tracking**: App-based, project-based, or category-based goals
+- **Floating Widget**: Always-on-top macOS overlay showing timer and progress
+- **Activity Matching**: Flexible criteria with whitelist/blacklist patterns
+- **Streak Tracking**: Current and longest streak with calendar support
+- **Tracking Modes**: "passive" (always track) or "strict" (timer only)
+- **Gentle Nudges**: Visual indicator when switching to off-goal apps
+
+**CLI Commands**:
+```bash
+captains-log focus -g "Deep work" -t 120 -a "VS Code,Terminal"
+captains-log focus -p "captains-log"  # Track by project
+captains-log focus  # Interactive mode
+captains-log focus-status  # Show today's sessions
+captains-log focus-goals --create "Writing" -t 60  # Create goal
+captains-log focus-goals  # List goals
+```
+
+**Configuration** (config.yaml):
+```yaml
+focus:
+  enabled: true
+  work_minutes: 25
+  short_break_minutes: 5
+  long_break_minutes: 15
+  pomodoros_until_long_break: 4
+  auto_start_breaks: true
+  auto_start_work: false
+  tracking_mode: passive  # or "strict"
+  show_widget: true
+  widget_position: top-right
+  gentle_nudges: true
+  default_goal_minutes: 120
+```
+
+**Widget Visual Design**:
+```
+┌─────────────────────────────────────────────────┐
+│  🍅 FOCUS MODE                                  │
+├─────────────────────────────────────────────────┤
+│           ⏱️  23:45                            │
+│           remaining                             │
+│     [ Pause ]  [ Skip ]  [ Reset ]              │
+├─────────────────────────────────────────────────┤
+│  📎 Goal: Deep work on captains-log             │
+│  ████████████░░░░░░  1.5h / 2h  (75%)          │
+│  🎯 Current: VS Code - pomodoro.py              │
+│  ✓ Tracking toward goal                         │
+├─────────────────────────────────────────────────┤
+│  Today: 🍅🍅🍅🍅○○○○  4/8 pomodoros             │
+│  Streak: 🔥 3 days                              │
+└─────────────────────────────────────────────────┘
+```
+
+**Database Schema** (v5):
+```sql
+CREATE TABLE focus_goals (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    goal_type TEXT NOT NULL,  -- app_based, project_based, category_based
+    target_minutes INTEGER NOT NULL,
+    match_criteria JSON,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at DATETIME
+);
+
+CREATE TABLE focus_sessions (
+    id INTEGER PRIMARY KEY,
+    goal_id INTEGER REFERENCES focus_goals(id),
+    date DATE NOT NULL,
+    pomodoro_count INTEGER DEFAULT 0,
+    total_focus_minutes REAL DEFAULT 0,
+    total_break_minutes REAL DEFAULT 0,
+    off_goal_minutes REAL DEFAULT 0,
+    completed BOOLEAN DEFAULT FALSE,
+    created_at DATETIME
+);
+
+CREATE TABLE pomodoro_history (
+    id INTEGER PRIMARY KEY,
+    session_id INTEGER REFERENCES focus_sessions(id),
+    started_at DATETIME NOT NULL,
+    ended_at DATETIME,
+    duration_minutes REAL,
+    was_completed BOOLEAN,
+    interruption_count INTEGER,
+    primary_app TEXT
+);
+```
+
+**Next Steps** (from plan):
+- Integrate widget with orchestrator for real-time activity updates
+- Add morning/evening briefings
+- Implement pattern detection from historical data
+- Add schedule optimizer based on focus patterns
