@@ -134,6 +134,15 @@ class StatusManager: ObservableObject {
     @Published var daemonRunning = false
     @Published var todayFocusMinutes: Double = 0
 
+    // Calendar integration
+    @Published var calendarManager = CalendarManager()
+
+    // Computed focus suggestion based on calendar and goals
+    var focusSuggestion: FocusSuggestion? {
+        guard !focusStatus.active else { return nil }
+        return calendarManager.suggestFocus(goals: goals)
+    }
+
     private var refreshTimer: Timer?
     private let statusFilePath = NSHomeDirectory() + "/Library/Application Support/CaptainsLog/focus_status.json"
     private let goalsFilePath = NSHomeDirectory() + "/Library/Application Support/CaptainsLog/goals_status.json"
@@ -184,21 +193,50 @@ class StatusManager: ObservableObject {
     func loadGoals() {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/bash")
-            process.arguments = ["-c", "\"\(self.venvPath)/bin/captains-log\" goals-status > \"\(self.goalsFilePath)\" 2>/dev/null"]
-            process.environment = ["PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"]
-            try? process.run()
-            process.waitUntilExit()
 
-            guard FileManager.default.fileExists(atPath: self.goalsFilePath),
-                  let data = try? Data(contentsOf: URL(fileURLWithPath: self.goalsFilePath)),
-                  let goalsData = try? JSONDecoder().decode(GoalsData.self, from: data) else {
+            // Ensure the directory exists
+            let directoryPath = (self.goalsFilePath as NSString).deletingLastPathComponent
+            try? FileManager.default.createDirectory(atPath: directoryPath, withIntermediateDirectories: true)
+
+            // Build the command path
+            let cmdPath = self.venvPath + "/bin/captains-log"
+
+            // Check if command exists
+            guard FileManager.default.fileExists(atPath: cmdPath) else {
                 return
             }
-            DispatchQueue.main.async {
-                self.goals = goalsData.goals
-                self.todayFocusMinutes = goalsData.todayFocusMinutes ?? 0
+
+            // Use shell to run the command
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = ["-c", cmdPath + " goals-status"]
+            process.currentDirectoryURL = URL(fileURLWithPath: NSHomeDirectory())
+
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+
+            do {
+                try process.run()
+                process.waitUntilExit()
+
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+
+                if !data.isEmpty, let jsonString = String(data: data, encoding: .utf8),
+                   jsonString.hasPrefix("{") {
+                    // Write to file
+                    try data.write(to: URL(fileURLWithPath: self.goalsFilePath))
+
+                    // Parse and update UI
+                    if let goalsData = try? JSONDecoder().decode(GoalsData.self, from: data) {
+                        DispatchQueue.main.async {
+                            self.goals = goalsData.goals
+                            self.todayFocusMinutes = goalsData.todayFocusMinutes ?? 0
+                        }
+                    }
+                }
+            } catch {
+                // Silently fail - goals will load on next interval
             }
         }
     }
@@ -373,7 +411,39 @@ struct MenuBarView: View {
             .frame(height: rowHeight)
             .padding(.horizontal, 12)
 
+            // Calendar Row
+            calendarSection
+
             Divider().padding(.horizontal, 8)
+
+            // Focus Suggestion (when not in session)
+            if !statusManager.focusStatus.active,
+               let suggestion = statusManager.focusSuggestion {
+                Button(action: {
+                    statusManager.startFocusSession(
+                        taskName: suggestion.goalName,
+                        minutes: suggestion.durationMinutes
+                    )
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "lightbulb.fill")
+                            .font(.system(size: iconSize))
+                            .foregroundColor(.yellow)
+                            .frame(width: 36)
+                        Text(suggestion.shortDisplayText)
+                            .font(.system(size: 12))
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(height: rowHeight)
+                    .padding(.horizontal, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background(Color.yellow.opacity(0.08))
+
+                Divider().padding(.horizontal, 8)
+            }
 
             // Goals Section
             if !statusManager.goals.isEmpty {
@@ -571,6 +641,122 @@ struct MenuBarView: View {
         case "short_break": return .green
         case "long_break": return .blue
         default: return statusManager.focusStatus.timerRunning ? .primary : .secondary
+        }
+    }
+
+    // MARK: - Calendar Section
+
+    @ViewBuilder
+    var calendarSection: some View {
+        if statusManager.calendarManager.hasAccess {
+            if let current = statusManager.calendarManager.currentEvent {
+                // Currently in meeting
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 6, height: 6)
+                        .frame(width: 36)
+                    Text("In: \(current.title)")
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(current.displayTime)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                .frame(height: rowHeight)
+                .padding(.horizontal, 12)
+            } else if let next = statusManager.calendarManager.nextEvent {
+                // Next meeting
+                let isUrgent = next.minutesUntilStart < 15
+                HStack(spacing: 6) {
+                    Image(systemName: isUrgent ? "exclamationmark.triangle.fill" : "calendar")
+                        .font(.system(size: iconSize))
+                        .foregroundColor(isUrgent ? .orange : .secondary)
+                        .frame(width: 36)
+                    Text(next.title)
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(next.displayTime)
+                        .font(.system(size: 11))
+                        .foregroundColor(isUrgent ? .orange : .secondary)
+                }
+                .frame(height: rowHeight)
+                .padding(.horizontal, 12)
+            } else {
+                // No more meetings
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: iconSize))
+                        .foregroundColor(.green)
+                        .frame(width: 36)
+                    Text("No more meetings today")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: rowHeight)
+                .padding(.horizontal, 12)
+            }
+
+            // Meeting-heavy warning
+            if statusManager.calendarManager.isMeetingHeavyDay {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.orange)
+                        .frame(width: 36)
+                    Text("Heavy meeting day (\(statusManager.calendarManager.totalMeetingMinutes / 60)h)")
+                        .font(.system(size: 10))
+                        .foregroundColor(.orange)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: 22)
+                .padding(.horizontal, 12)
+            }
+        } else if statusManager.calendarManager.accessDenied {
+            // Access denied - show button to open settings
+            HStack(spacing: 6) {
+                Image(systemName: "calendar.badge.exclamationmark")
+                    .font(.system(size: iconSize))
+                    .foregroundColor(.secondary)
+                    .frame(width: 36)
+                Text("Calendar access denied")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button("Settings") {
+                    statusManager.calendarManager.openSystemPreferences()
+                }
+                .font(.system(size: 10))
+                .buttonStyle(.plain)
+                .foregroundColor(.blue)
+            }
+            .frame(height: rowHeight)
+            .padding(.horizontal, 12)
+        } else {
+            // Not determined - request access
+            Button(action: {
+                Task {
+                    await statusManager.calendarManager.requestAccess()
+                }
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: iconSize))
+                        .foregroundColor(.blue)
+                        .frame(width: 36)
+                    Text("Connect Calendar")
+                        .font(.system(size: 12))
+                        .foregroundColor(.blue)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: rowHeight)
+                .padding(.horizontal, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 

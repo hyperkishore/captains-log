@@ -23,7 +23,7 @@ class ClaudeClient:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "claude-haiku-4-5-20241022",
+        model: str = "claude-3-5-haiku-20241022",
         max_tokens: int = 1024,
         max_retries: int = 3,
         base_delay: float = 1.0,
@@ -32,7 +32,7 @@ class ClaudeClient:
 
         Args:
             api_key: Claude API key. If None, uses ANTHROPIC_API_KEY env var.
-            model: Model to use (default: claude-haiku-4-5-20241022).
+            model: Model to use (default: claude-3-5-haiku-20241022).
             max_tokens: Maximum tokens in response.
             max_retries: Maximum retry attempts on rate limit.
             base_delay: Base delay for exponential backoff.
