@@ -226,12 +226,261 @@ User focuses → Sees progress → Shares achievement
 | "Meeting-heavy day" warning | P1 | Daily planning |
 | Auto-detect meeting from Zoom/Meet | P2 | No manual tracking |
 
-#### Implementation: macOS EventKit (Native)
+---
 
-**Why EventKit over Google Calendar API:**
-- No OAuth flow needed (simpler UX)
-- Reads ALL calendars synced to macOS (iCloud, Google, Outlook, Exchange)
-- Native Swift integration with menu bar app
+## Scalable Calendar Architecture
+
+### Design Principles
+1. **Protocol-based** - Abstract calendar sources behind unified interface
+2. **EventKit first** - Ship fast with native macOS
+3. **Google Calendar next** - Add OAuth flow in iteration 2
+4. **Local-first, cloud-optional** - Privacy by default, sync when needed
+
+### Phased Implementation
+
+#### Phase 5a: EventKit Foundation (Week 1)
+- CalendarProvider protocol (Swift)
+- EventKitProvider implementation
+- Menu bar integration
+- Local caching in SQLite
+
+#### Phase 5b: Google Calendar (Week 2-3)
+- GoogleCalendarProvider implementation
+- OAuth 2.0 flow in menu bar app (opens browser, handles redirect)
+- Token storage in Keychain
+- Provider selection UI in settings
+
+#### Phase 5c: Cloud Sync - Optional (Week 4+)
+- Calendar events sync to cloud (encrypted)
+- Cross-device availability
+- User opt-in only
+
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Menu Bar App                            │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │              CalendarManager                         │    │
+│  │  - Aggregates events from all providers              │    │
+│  │  - Deduplicates (same event from multiple sources)   │    │
+│  │  - Provides unified API to UI                        │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                          │                                   │
+│            ┌─────────────┴─────────────┐                    │
+│            ▼                           ▼                    │
+│  ┌─────────────────┐         ┌─────────────────┐           │
+│  │ EventKitProvider │         │ GoogleProvider  │           │
+│  │ (Phase 5a)       │         │ (Phase 5b)      │           │
+│  └─────────────────┘         └─────────────────┘           │
+│            │                           │                    │
+│            ▼                           ▼                    │
+│     macOS Calendar              Google Calendar API         │
+│     (via EventKit)              (via OAuth 2.0)             │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+              ┌─────────────────────┐
+              │   Local SQLite DB   │
+              │   (cached events)   │
+              └─────────────────────┘
+                          │
+                          ▼ (Optional - Phase 5c)
+              ┌─────────────────────┐
+              │   Cloud Sync        │
+              │   (encrypted)       │
+              └─────────────────────┘
+```
+
+### CalendarProvider Protocol (Swift)
+
+```swift
+protocol CalendarProvider {
+    var id: String { get }
+    var name: String { get }
+    var isConnected: Bool { get }
+    var requiresAuth: Bool { get }
+
+    func requestAccess() async -> Bool
+    func fetchEvents(from: Date, to: Date) async throws -> [CalendarEvent]
+    func disconnect()
+}
+
+// Unified event model (provider-agnostic)
+struct CalendarEvent: Identifiable, Hashable {
+    let id: String
+    let providerId: String  // "eventkit" or "google"
+    let externalId: String  // Original ID from provider
+    let title: String
+    let startDate: Date
+    let endDate: Date
+    let isAllDay: Bool
+    let location: String?
+    let meetingUrl: String?  // Zoom/Meet link if detected
+    let calendarName: String
+    let calendarColor: Color?
+
+    // For deduplication
+    func matches(_ other: CalendarEvent) -> Bool {
+        // Same event synced from multiple sources
+        return title == other.title &&
+               abs(startDate.timeIntervalSince(other.startDate)) < 60 &&
+               abs(endDate.timeIntervalSince(other.endDate)) < 60
+    }
+}
+```
+
+### CalendarManager (Aggregator)
+
+```swift
+class CalendarManager: ObservableObject {
+    @Published var providers: [CalendarProvider] = []
+    @Published var events: [CalendarEvent] = []
+    @Published var nextEvent: CalendarEvent?
+    @Published var freeMinutes: Int = 0
+
+    private let cache: CalendarCache  // SQLite
+
+    init() {
+        // Always try EventKit first
+        let eventKit = EventKitProvider()
+        providers.append(eventKit)
+
+        // Check if Google is configured
+        if let google = GoogleCalendarProvider.loadFromKeychain() {
+            providers.append(google)
+        }
+    }
+
+    func fetchAllEvents() async {
+        var allEvents: [CalendarEvent] = []
+
+        for provider in providers where provider.isConnected {
+            let events = try? await provider.fetchEvents(
+                from: Date(),
+                to: Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+            )
+            allEvents.append(contentsOf: events ?? [])
+        }
+
+        // Deduplicate and sort
+        events = deduplicateEvents(allEvents)
+            .filter { !$0.isAllDay }
+            .sorted { $0.startDate < $1.startDate }
+
+        // Cache locally
+        cache.store(events)
+
+        updateNextEvent()
+    }
+
+    private func deduplicateEvents(_ events: [CalendarEvent]) -> [CalendarEvent] {
+        var unique: [CalendarEvent] = []
+        for event in events {
+            if !unique.contains(where: { $0.matches(event) }) {
+                unique.append(event)
+            }
+        }
+        return unique
+    }
+}
+```
+
+### Google OAuth Flow (Phase 5b)
+
+```swift
+class GoogleCalendarProvider: CalendarProvider {
+    let id = "google"
+    let name = "Google Calendar"
+    let requiresAuth = true
+
+    private var accessToken: String?
+    private var refreshToken: String?
+
+    var isConnected: Bool { accessToken != nil }
+
+    // OAuth configuration
+    private let clientId = "YOUR_CLIENT_ID.apps.googleusercontent.com"
+    private let redirectUri = "captainslog://oauth/google"
+    private let scopes = ["https://www.googleapis.com/auth/calendar.readonly"]
+
+    func requestAccess() async -> Bool {
+        // 1. Build OAuth URL
+        let authUrl = buildAuthUrl()
+
+        // 2. Open in default browser
+        NSWorkspace.shared.open(authUrl)
+
+        // 3. Wait for redirect (handled by URL scheme)
+        // App delegate handles: captainslog://oauth/google?code=XXX
+
+        // 4. Exchange code for tokens
+        // 5. Store in Keychain
+
+        return true
+    }
+
+    func fetchEvents(from: Date, to: Date) async throws -> [CalendarEvent] {
+        guard let token = accessToken else { throw AuthError.notAuthenticated }
+
+        // Call Google Calendar API
+        let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/primary/events")!
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, _) = try await URLSession.shared.data(for: request)
+        let response = try JSONDecoder().decode(GoogleEventsResponse.self, from: data)
+
+        return response.items.map { $0.toCalendarEvent(providerId: id) }
+    }
+}
+```
+
+### URL Scheme Registration (Info.plist)
+
+```xml
+<key>CFBundleURLTypes</key>
+<array>
+    <dict>
+        <key>CFBundleURLName</key>
+        <string>OAuth Callback</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+            <string>captainslog</string>
+        </array>
+    </dict>
+</array>
+```
+
+### Settings UI for Calendar Sources
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Calendar Sources                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ✅ macOS Calendar (EventKit)                    Connected   │
+│     Calendars: Work, Personal, Holidays                      │
+│                                                              │
+│  ⬜ Google Calendar                         [Connect]        │
+│     Sign in to see Google Calendar events                    │
+│                                                              │
+│  ⬜ Microsoft Outlook                       Coming Soon      │
+│                                                              │
+├─────────────────────────────────────────────────────────────┤
+│  ☁️ Cloud Sync                              [ ] Enabled     │
+│     Sync calendar cache across devices                       │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Implementation: macOS EventKit (Phase 5a)
+
+**Why EventKit first:**
+- No OAuth complexity
+- Ships in 1 week
+- Works for users with synced calendars
+- Validates the UX before adding complexity
 
 #### Menu Bar States
 
@@ -494,3 +743,98 @@ User focuses → Sees progress → Shares achievement
 - [Flow App](https://www.flow.app/)
 - [ActivityWatch](https://activitywatch.net/)
 - [Cal Newport: Time Block Planner](https://www.timeblockplanner.com/)
+
+---
+
+## The Core Problem
+
+**"Value not visible"** - We built sophisticated tracking and AI analysis, but the insights don't surface in a way that feels useful day-to-day.
+
+**Key Metric:** Deep Work Hours - concrete, meaningful, checkable daily.
+
+**Value Prop:** "AI Productivity Co-pilot - Get more done."
+
+The product has:
+- ✅ Activity tracking (excellent)
+- ✅ AI summaries (sophisticated)
+- ✅ Optimization engine (advanced)
+- ✅ Focus timer (complete)
+- ✅ Dashboard (functional)
+
+But the value is buried. Users need to **dig** to find insights instead of having insights **pushed** to them.
+
+---
+
+## Success Metrics for Public Launch
+
+| Metric | Target |
+|--------|--------|
+| Day 1 retention | 70% check score next day |
+| Day 7 retention | 40% still using |
+| Time to value | < 5 minutes |
+| Can articulate value | "I save X hours/week" |
+| Referral | 10% share with friend |
+
+---
+
+## The "Time Saved" Feature
+
+**Goal:** User sees concrete value and tells others
+
+**The Problem:**
+- Abstract metrics (switches, interrupts) don't feel real
+- No "aha" moment that makes users share
+- ROI isn't visible
+
+**The Fix - Time Saved Counter:**
+```
+This Week: 2.3 hours saved
+This Month: 8.5 hours saved
+
+How? You batched Slack checks (saved 45min)
+     You had 2 fewer meetings (saved 1h)
+     You avoided Twitter rabbit holes (saved 45min)
+```
+- Makes the invisible visible
+- Concrete, not abstract
+- Shareable ("I saved 8 hours this month!")
+
+---
+
+## Simplified Product Vision
+
+**One sentence:** "Know where your time goes and get it back."
+
+**Core loop:**
+1. Wake up → See yesterday's score (motivation)
+2. Work → Menu bar shows live score (awareness)
+3. Slip → Gentle nudge (course correction)
+4. End day → See time saved (reward)
+5. End week → Email digest (reflection)
+6. Repeat
+
+**Key insight:** The goal isn't to show MORE data. It's to show the RIGHT data at the RIGHT time.
+
+---
+
+## Implementation Priority (Week by Week)
+
+### Week 1: Core Engagement Loop
+- [ ] Simplify menu bar to show focus score number
+- [ ] Add morning notification with yesterday's highlight
+- [ ] Create "one number" dashboard view
+
+### Week 2: Progress & Motivation
+- [ ] Implement "Time Saved" calculation
+- [ ] Add weekly streak visualization
+- [ ] Create simple before/after comparison
+
+### Week 3: Polish & Share
+- [ ] Weekly email digest
+- [ ] Improve first-time experience
+- [ ] Add share capability ("I saved 8h this month with Captain's Log")
+
+### Week 4: Public Launch Prep
+- [ ] Landing page with clear value prop
+- [ ] Installation docs with screenshots
+- [ ] Demo mode for website
