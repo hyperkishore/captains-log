@@ -475,7 +475,7 @@ captains-log summaries-process          # Process pending queue
 ```yaml
 summarization:
   enabled: true
-  model: claude-haiku-4-5-20241022
+  model: claude-3-5-haiku-20241022
   use_batch_api: true
   batch_interval_hours: 6
   vision_enabled: true
@@ -811,3 +811,76 @@ async def _get_today_total_focus_minutes(self) -> float:
 - Implement Calendar Integration using macOS EventKit
 - Research existing productivity tools in market
 - Add morning/evening notification system
+
+### 2026-01-18: 80/20 Product Roadmap Strategy & Time Optimization Engine
+
+**Context**: User hasn't been using Captain's Log consistently despite building feature-rich product. Root cause identified: **"Value not visible"** - data exists but doesn't feel useful day-to-day.
+
+**Key Insights Captured**:
+- **Primary Metric**: Deep Work Hours (concrete, meaningful, checkable daily)
+- **Value Prop**: "AI Productivity Co-pilot - Get more done"
+- **Core Problem**: Users need to dig to find insights instead of having insights pushed to them
+
+**Time Optimization Engine Implemented**:
+
+Files created in `src/captains_log/optimization/`:
+- `schemas.py` - Data models (InterruptEvent, ContextSwitch, Nudge, etc.)
+- `interrupt_detector.py` - Detects communication app interrupts
+- `context_switch_analyzer.py` - Calculates context switch costs
+- `deal_classifier.py` - DEAL framework (Delegate, Eliminate, Automate, Leverage)
+- `meeting_fragmentation.py` - Swiss Cheese Score for meeting analysis
+- `daily_briefing.py` - Morning summary generator
+- `weekly_report.py` - Comprehensive weekly analysis
+- `nudge_system.py` - Real-time nudges, writes `optimization_status.json`
+
+CLI commands added:
+```bash
+captains-log optimize           # DEAL breakdown, interrupts, switches
+captains-log optimize-briefing  # Morning summary with wins, focus tips
+captains-log optimize-report    # Weekly comprehensive report
+captains-log optimize-profile   # Set role, hourly rate, savings goal
+```
+
+**Product Roadmap Updated** (`ROADMAP.md`):
+
+Added sections:
+1. **The Core Problem** - "Value not visible" with key metric and value prop
+2. **Success Metrics for Public Launch** - Day 1/7 retention targets, time to value
+3. **The "Time Saved" Feature** - Concrete ROI users can share
+4. **Simplified Product Vision** - "Know where your time goes and get it back"
+5. **Implementation Priority** - Week-by-week breakdown for 4 weeks
+
+**80/20 Focus - Build These 5 Things**:
+1. Focus score number in menu bar
+2. Morning notification with one insight
+3. "Time saved this week" counter
+4. Weekly streak visualization
+5. Weekly email digest
+
+**Skip everything else until these drive daily engagement.**
+
+**Success Metrics**:
+| Metric | Target |
+|--------|--------|
+| Day 1 retention | 70% check score next day |
+| Day 7 retention | 40% still using |
+| Time to value | < 5 minutes |
+| Can articulate value | "I save X hours/week" |
+
+**Calendar Integration Architecture** (added by other developer):
+- Protocol-based design with CalendarProvider interface
+- Phase 5a: EventKit Foundation (Week 1)
+- Phase 5b: Google Calendar with OAuth (Week 2-3)
+- Phase 5c: Cloud Sync - Optional (Week 4+)
+- CalendarManager aggregates events from multiple providers
+
+**Market Research Added**:
+- Competitive landscape analysis (RescueTime, Timing, Flow, Reclaim, etc.)
+- Captain's Log differentiation: combines automatic tracking + goal-based focus + local-first + AI insights
+- Target user: Solo knowledge worker (dev/writer/designer) on Mac who values privacy
+
+**Files Modified**:
+- `ROADMAP.md` - Added core problem, success metrics, time saved feature, implementation priorities
+- `CLAUDE.md` - This session log entry
+
+**Plan File**: `~/.claude/plans/frolicking-launching-island.md` contains the original 80/20 analysis

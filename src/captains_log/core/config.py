@@ -44,7 +44,7 @@ class SummarizationConfig(BaseModel):
     """AI summarization configuration."""
 
     enabled: bool = True
-    model: str = Field(default="claude-haiku-4-5-20241022")
+    model: str = Field(default="claude-3-5-haiku-20241022")
     use_batch_api: bool = Field(default=True, description="Use batch API for 50% cost savings")
     batch_interval_hours: int = Field(default=6, description="Process queue every N hours")
     vision_enabled: bool = True

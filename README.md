@@ -127,7 +127,7 @@ screenshots:
 # AI Summarization (Phase 3)
 summarization:
   enabled: true
-  model: claude-haiku-4-5-20241022
+  model: claude-3-5-haiku-20241022
   use_batch_api: true        # 50% cost savings
 
 # Web dashboard

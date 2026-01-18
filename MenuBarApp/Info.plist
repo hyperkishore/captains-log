@@ -24,5 +24,7 @@
     <true/>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.productivity</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Captain's Log needs calendar access to show your next meeting and suggest optimal focus times.</string>
 </dict>
 </plist>

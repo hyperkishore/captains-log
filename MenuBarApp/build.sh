@@ -18,7 +18,12 @@ swiftc \
     -target arm64-apple-macos12.0 \
     -framework SwiftUI \
     -framework AppKit \
+    -framework EventKit \
     -parse-as-library \
+    "$SCRIPT_DIR/CalendarModels.swift" \
+    "$SCRIPT_DIR/CalendarProvider.swift" \
+    "$SCRIPT_DIR/EventKitProvider.swift" \
+    "$SCRIPT_DIR/CalendarManager.swift" \
     "$SCRIPT_DIR/CaptainsLogMenuBar.swift"
 
 # Create app bundle structure
