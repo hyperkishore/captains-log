@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from captains_log.focus.pomodoro import PomodoroTimer, PomodoroConfig, TimerPhase
@@ -13,6 +15,9 @@ from captains_log.focus.activity_matcher import MatchCriteria
 from captains_log.widget.focus_widget import FocusWidget, WidgetState, WidgetMode
 
 logger = logging.getLogger(__name__)
+
+# Status file for Swift widget to read
+STATUS_FILE = Path.home() / "Library" / "Application Support" / "CaptainsLog" / "focus_status.json"
 
 
 class WidgetController:
@@ -65,6 +70,7 @@ class WidgetController:
         self,
         goal_name: str,
         target_minutes: int = 120,
+        estimated_sessions: int = 4,
         match_criteria: MatchCriteria | None = None,
         goal_type: str = "app_based",
         tracking_mode: str = "passive",
@@ -75,6 +81,7 @@ class WidgetController:
         Args:
             goal_name: Name for the goal
             target_minutes: Target minutes to achieve
+            estimated_sessions: Estimated Pomodoro sessions to complete the task
             match_criteria: Criteria for matching activities
             goal_type: Type of goal (app_based, project_based, etc.)
             tracking_mode: "passive" (always track) or "strict" (timer only)
@@ -111,6 +118,7 @@ class WidgetController:
                 name=goal_name,
                 goal_type=GoalType(goal_type),
                 target_minutes=target_minutes,
+                estimated_sessions=estimated_sessions,
                 match_criteria=match_criteria or MatchCriteria(),
             )
 
@@ -195,6 +203,7 @@ class WidgetController:
             self._widget = None
 
         self._active = False
+        self.clear_status_file()
         logger.info("Focus session stopped")
 
         return session
@@ -332,6 +341,9 @@ class WidgetController:
 
     def _update_widget(self) -> None:
         """Update the widget with current state."""
+        # Always write status file for Swift widget (even when PyObjC widget disabled)
+        self.write_status_file()
+
         if not self._widget:
             return
 
@@ -414,3 +426,60 @@ class WidgetController:
         status["streak_days"] = self._streak_days
 
         return status
+
+    def write_status_file(self) -> None:
+        """Write status to JSON file for Swift widget to read."""
+        try:
+            STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+            # Build flat status dict for Swift widget
+            status = {
+                "active": self._active,
+                "current_app": self._current_app,
+                "streak_days": self._streak_days,
+                "goal_name": "",
+                "target_minutes": 0,
+                "focus_minutes": 0.0,
+                "pomodoro_count": 0,
+                "estimated_sessions": 4,
+                "daily_focus_minutes": 0.0,
+                "completed": False,
+                "is_on_goal": True,
+                "timer_phase": "work",
+                "time_remaining": "25:00",
+                "timer_running": False,
+            }
+
+            if self._timer:
+                ts = self._timer.state
+                status["timer_phase"] = ts.phase.value
+                status["time_remaining"] = ts.time_remaining_display
+                status["timer_running"] = ts.is_running
+
+            if self._tracker and self._tracker.current_session:
+                session = self._tracker.current_session
+                if self._tracker.active_goal:
+                    status["goal_name"] = self._tracker.active_goal.name
+                    status["target_minutes"] = self._tracker.active_goal.target_minutes
+                    # Get estimated sessions from goal (default 4)
+                    status["estimated_sessions"] = getattr(
+                        self._tracker.active_goal, 'estimated_sessions', 4
+                    ) or 4
+                status["focus_minutes"] = round(session.total_focus_minutes, 1)
+                status["pomodoro_count"] = session.pomodoro_count
+                status["completed"] = session.completed
+                status["is_on_goal"] = self._tracker.is_on_goal
+                # Daily focus is sum of today's session minutes
+                status["daily_focus_minutes"] = round(session.total_focus_minutes, 1)
+
+            STATUS_FILE.write_text(json.dumps(status, indent=2))
+        except Exception as e:
+            logger.error(f"Failed to write status file: {e}")
+
+    def clear_status_file(self) -> None:
+        """Clear the status file when session stops."""
+        try:
+            status = {"active": False}
+            STATUS_FILE.write_text(json.dumps(status, indent=2))
+        except Exception as e:
+            logger.error(f"Failed to clear status file: {e}")

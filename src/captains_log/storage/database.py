@@ -17,7 +17,7 @@ import aiosqlite
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 8
 
 # Database schema
 SCHEMA = """
@@ -196,6 +196,7 @@ CREATE TABLE IF NOT EXISTS focus_goals (
     name TEXT NOT NULL,
     goal_type TEXT NOT NULL DEFAULT 'app_based',
     target_minutes INTEGER NOT NULL DEFAULT 120,
+    estimated_sessions INTEGER DEFAULT 4,
     match_criteria JSON,
     is_active BOOLEAN DEFAULT TRUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -234,6 +235,66 @@ CREATE TABLE IF NOT EXISTS pomodoro_history (
 
 CREATE INDEX IF NOT EXISTS idx_pomodoro_session ON pomodoro_history(session_id);
 CREATE INDEX IF NOT EXISTS idx_pomodoro_started ON pomodoro_history(started_at);
+
+-- Productivity goals (quarterly/half-year objectives)
+CREATE TABLE IF NOT EXISTS productivity_goals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    estimated_hours REAL NOT NULL DEFAULT 40,
+    deadline DATE,
+    priority INTEGER DEFAULT 0,
+    color TEXT DEFAULT '#3B82F6',
+    is_active BOOLEAN DEFAULT TRUE,
+    is_completed BOOLEAN DEFAULT FALSE,
+    target_mode TEXT DEFAULT 'fixed',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME
+);
+
+CREATE INDEX IF NOT EXISTS idx_prod_goals_active ON productivity_goals(is_active);
+CREATE INDEX IF NOT EXISTS idx_prod_goals_priority ON productivity_goals(priority);
+
+-- Tasks within productivity goals (30-60 min chunks)
+CREATE TABLE IF NOT EXISTS goal_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id INTEGER REFERENCES productivity_goals(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    estimated_minutes INTEGER DEFAULT 30,
+    parent_task_id INTEGER REFERENCES goal_tasks(id),
+    sort_order INTEGER DEFAULT 0,
+    is_completed BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME
+);
+
+CREATE INDEX IF NOT EXISTS idx_goal_tasks_goal ON goal_tasks(goal_id);
+CREATE INDEX IF NOT EXISTS idx_goal_tasks_parent ON goal_tasks(parent_task_id);
+
+-- Daily progress per productivity goal (for streak visualization)
+CREATE TABLE IF NOT EXISTS goal_daily_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id INTEGER REFERENCES productivity_goals(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    focus_minutes REAL DEFAULT 0,
+    target_minutes REAL NOT NULL,
+    status TEXT DEFAULT 'pending',
+    sessions_completed INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(goal_id, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_goal_progress_date ON goal_daily_progress(date);
+CREATE INDEX IF NOT EXISTS idx_goal_progress_goal ON goal_daily_progress(goal_id);
+
+-- App settings
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -438,6 +499,7 @@ class Database:
                     name TEXT NOT NULL,
                     goal_type TEXT NOT NULL DEFAULT 'app_based',
                     target_minutes INTEGER NOT NULL DEFAULT 120,
+                    estimated_sessions INTEGER DEFAULT 4,
                     match_criteria JSON,
                     is_active BOOLEAN DEFAULT TRUE,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -490,6 +552,316 @@ class Database:
             )
 
             logger.info("Migration v4 -> v5 complete")
+
+        # Migration from version 5 to 6: Add estimated_sessions to focus_goals
+        if from_version < 6:
+            logger.info("Running migration v5 -> v6: Adding estimated_sessions to focus_goals")
+
+            # Get existing columns in focus_goals table
+            async with self._connection.execute("PRAGMA table_info(focus_goals)") as cursor:
+                existing_cols = {row[1] for row in await cursor.fetchall()}
+
+            if "estimated_sessions" not in existing_cols:
+                try:
+                    await self._connection.execute(
+                        "ALTER TABLE focus_goals ADD COLUMN estimated_sessions INTEGER DEFAULT 4"
+                    )
+                    logger.debug("Added column estimated_sessions to focus_goals")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" not in str(e).lower():
+                        raise
+
+            logger.info("Migration v5 -> v6 complete")
+
+        # Migration from version 6 to 7: Add productivity goals and tasks
+        if from_version < 7:
+            logger.info("Running migration v6 -> v7: Adding productivity goals and tasks tables")
+
+            # Create productivity_goals table
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS productivity_goals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    estimated_hours REAL NOT NULL DEFAULT 40,
+                    deadline DATE,
+                    priority INTEGER DEFAULT 0,
+                    color TEXT DEFAULT '#3B82F6',
+                    is_active BOOLEAN DEFAULT TRUE,
+                    is_completed BOOLEAN DEFAULT FALSE,
+                    target_mode TEXT DEFAULT 'fixed',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    completed_at DATETIME
+                )
+            """)
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_prod_goals_active ON productivity_goals(is_active)"
+            )
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_prod_goals_priority ON productivity_goals(priority)"
+            )
+
+            # Create goal_tasks table
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS goal_tasks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    goal_id INTEGER REFERENCES productivity_goals(id) ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    estimated_minutes INTEGER DEFAULT 30,
+                    parent_task_id INTEGER REFERENCES goal_tasks(id),
+                    sort_order INTEGER DEFAULT 0,
+                    is_completed BOOLEAN DEFAULT FALSE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    completed_at DATETIME
+                )
+            """)
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_goal_tasks_goal ON goal_tasks(goal_id)"
+            )
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_goal_tasks_parent ON goal_tasks(parent_task_id)"
+            )
+
+            # Create goal_daily_progress table
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS goal_daily_progress (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    goal_id INTEGER REFERENCES productivity_goals(id) ON DELETE CASCADE,
+                    date DATE NOT NULL,
+                    focus_minutes REAL DEFAULT 0,
+                    target_minutes REAL NOT NULL,
+                    status TEXT DEFAULT 'pending',
+                    sessions_completed INTEGER DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(goal_id, date)
+                )
+            """)
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_goal_progress_date ON goal_daily_progress(date)"
+            )
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_goal_progress_goal ON goal_daily_progress(goal_id)"
+            )
+
+            # Create app_settings table
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Insert default settings
+            default_settings = [
+                ("default_pomodoro_minutes", "25"),
+                ("target_mode", "fixed"),
+            ]
+            for key, value in default_settings:
+                await self._connection.execute(
+                    """INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)""",
+                    (key, value),
+                )
+
+            logger.info("Migration v6 -> v7 complete")
+
+        # Migration from version 7 to 8: Add time optimization tables
+        if from_version < 8:
+            logger.info("Running migration v7 -> v8: Adding time optimization tables")
+
+            # Create user_profile table for personalized optimization
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS user_profile (
+                    id INTEGER PRIMARY KEY,
+                    role TEXT,
+                    department TEXT,
+                    hourly_rate REAL,
+                    work_hours_per_week INTEGER DEFAULT 40,
+                    time_savings_goal REAL DEFAULT 0.20,
+                    ideal_deep_work_hours REAL DEFAULT 4.0,
+                    preferred_work_start TEXT DEFAULT '09:00',
+                    preferred_work_end TEXT DEFAULT '18:00',
+                    focus_apps JSON,
+                    communication_apps JSON,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Create interrupts table for tracking communication checks
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS interrupts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp DATETIME NOT NULL,
+                    interrupt_app TEXT NOT NULL,
+                    duration_seconds REAL NOT NULL,
+                    previous_app TEXT,
+                    next_app TEXT,
+                    interrupt_type TEXT,
+                    context_loss_estimate REAL,
+                    work_context_before TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_interrupts_ts ON interrupts(timestamp)"
+            )
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_interrupts_type ON interrupts(interrupt_type)"
+            )
+
+            # Create context_switches table for tracking switch costs
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS context_switches (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp DATETIME NOT NULL,
+                    from_app TEXT,
+                    from_category TEXT,
+                    to_app TEXT,
+                    to_category TEXT,
+                    deep_work_duration_before REAL,
+                    estimated_cost_minutes REAL,
+                    actual_recovery_seconds REAL,
+                    switch_type TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_context_switch_ts ON context_switches(timestamp)"
+            )
+
+            # Create daily_optimization_metrics table for pre-aggregated daily data
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS daily_optimization_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date DATE NOT NULL UNIQUE,
+                    total_tracked_minutes REAL,
+                    deep_work_minutes REAL,
+                    communication_minutes REAL,
+                    meeting_minutes REAL,
+                    admin_minutes REAL,
+                    entertainment_minutes REAL,
+                    interrupt_count INTEGER,
+                    quick_check_count INTEGER,
+                    avg_interrupt_duration_seconds REAL,
+                    estimated_interrupt_cost_minutes REAL,
+                    context_switch_count INTEGER,
+                    estimated_switch_cost_minutes REAL,
+                    meeting_count INTEGER,
+                    usable_blocks_count INTEGER,
+                    fragmented_blocks_count INTEGER,
+                    swiss_cheese_score REAL,
+                    delegate_minutes REAL,
+                    eliminate_minutes REAL,
+                    automate_minutes REAL,
+                    leverage_minutes REAL,
+                    potential_savings_minutes REAL,
+                    savings_breakdown JSON,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_daily_opt_date ON daily_optimization_metrics(date)"
+            )
+
+            # Create weekly_optimization_insights table for AI-generated insights
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS weekly_optimization_insights (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    week_start DATE NOT NULL,
+                    week_end DATE NOT NULL,
+                    total_tracked_hours REAL,
+                    deep_work_hours REAL,
+                    time_saved_estimate REAL,
+                    top_time_wasters JSON,
+                    automation_opportunities JSON,
+                    schedule_recommendations JSON,
+                    ai_narrative TEXT,
+                    key_insights JSON,
+                    action_items JSON,
+                    vs_previous_week JSON,
+                    model_used TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(week_start, week_end)
+                )
+            """)
+
+            # Create repetitive_patterns table for automation opportunities
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS repetitive_patterns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pattern_type TEXT NOT NULL,
+                    pattern_signature TEXT NOT NULL,
+                    description TEXT,
+                    frequency_per_week REAL,
+                    avg_duration_minutes REAL,
+                    total_time_week_minutes REAL,
+                    automation_potential TEXT,
+                    deal_classification TEXT,
+                    ai_suggestion TEXT,
+                    first_seen DATE,
+                    last_seen DATE,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_repetitive_active ON repetitive_patterns(is_active)"
+            )
+
+            # Create nudge_history table for tracking nudges
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS nudge_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp DATETIME NOT NULL,
+                    nudge_type TEXT NOT NULL,
+                    nudge_content TEXT,
+                    was_dismissed BOOLEAN DEFAULT FALSE,
+                    was_acted_upon BOOLEAN,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_nudge_ts ON nudge_history(timestamp)"
+            )
+
+            # Create optimization_recommendations table
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS optimization_recommendations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    current_behavior TEXT,
+                    suggested_behavior TEXT,
+                    estimated_savings_minutes REAL,
+                    confidence REAL,
+                    evidence JSON,
+                    implementation_steps JSON,
+                    status TEXT DEFAULT 'pending',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    accepted_at DATETIME,
+                    dismissed_at DATETIME
+                )
+            """)
+            await self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_recommendations_status ON optimization_recommendations(status)"
+            )
+
+            # Create daily_briefings table
+            await self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS daily_briefings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date DATE NOT NULL UNIQUE,
+                    content JSON,
+                    viewed_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            logger.info("Migration v7 -> v8 complete")
 
     async def close(self) -> None:
         """Close database connection."""

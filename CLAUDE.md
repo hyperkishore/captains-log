@@ -173,9 +173,12 @@ CREATE TABLE summaries (
 - [x] **Phase 1**: Core Daemon - Activity tracking, CLI, Web Dashboard
 - [x] **Phase 2**: Screenshot Capture - CoreGraphics, WebP compression, app-change triggers
 - [x] **Phase 3**: AI Summaries - Claude Haiku, Batch API, vision support, focus calculator
-- [ ] **Phase 4**: Aggregation - Daily/weekly summaries
-- [ ] **Phase 5**: Cloud Sync - Encrypted S3/R2
-- [ ] **Phase 6**: Integrations - Gmail, Calendar, Slack
+- [x] **Phase 4**: Focus UI/UX - Menu bar app, floating widget, goal streaks, one-click start
+- [ ] **Phase 5**: Calendar Integration - macOS EventKit, smart suggestions (NEXT)
+- [ ] **Phase 6**: Proactive AI - Morning/evening notifications, nudges
+- [ ] **Phase 7**: Social/Growth - Shareable weekly summaries, milestones
+
+See `ROADMAP.md` for detailed product roadmap.
 
 ## Development Notes
 
@@ -320,8 +323,9 @@ bash "/Users/kishore/Library/Application Support/SwiftBar/Plugins/captains-log.1
 **IMPORTANT**: Follow these instructions in every session working on this project.
 
 ### 1. Before Starting Work
-- Read the plan file at `~/.claude/plans/zippy-crunching-hickey.md` for current implementation status
+- Read the plan file at `~/.claude/plans/peaceful-cooking-lake.md` for current implementation status
 - Check the Phase Implementation Status above to understand what's complete
+- See `ROADMAP.md` for product roadmap and prioritization
 
 ### 2. After Completing Work
 - Update this CLAUDE.md file with any significant changes or new patterns
@@ -480,6 +484,111 @@ summarization:
 # Requires: ANTHROPIC_API_KEY or CAPTAINS_LOG_CLAUDE_API_KEY
 ```
 
+### 2026-01-18: Focus UI/UX Redesign
+
+**Problem Statement**: Help people maintain focused effort while working. The UI should provide ambient awareness without being distracting.
+
+**Design Principles**:
+1. Minimal cognitive load - Glanceable, not interactive
+2. Ambient presence - Always visible but unobtrusive
+3. Accountability - What am I working on? How long? How many sessions to go?
+4. Session-based thinking - "3 of 6 sessions" not "75% complete"
+
+**Completed**:
+
+1. **Native Menu Bar App** (`MenuBarApp/CaptainsLogMenuBar.swift`):
+   - Replaced SwiftBar plugin with native Swift app using NSStatusBar + NSPopover
+   - Fixed size popup (220x180) to prevent shifting
+   - New session form: task name, duration picker, sessions picker, apps field
+   - Active session controls: Pause/Resume button, End button, Widget button
+   - Session dots showing progress (●●○○ = 2 of 4 sessions)
+   - Daily focus time in header
+   - Daemon status indicator (green/red dot)
+
+2. **Focus Widget Redesign** (`FocusWidget/FocusWidgetApp.swift`):
+   - Removed Full mode - now only Compact and Mini
+   - Removed progress bar, percentage, pause/skip/reset buttons
+   - Added session dots (●●●○○○)
+   - Click to toggle between Compact ↔ Mini
+   - Off-goal activities show amber border
+   - Sounds on phase change and completion
+
+3. **Database Schema** (`storage/database.py`):
+   - Added `estimated_sessions INTEGER DEFAULT 4` to `focus_goals` table
+   - Schema version bumped from 5 to 6
+   - Migration automatically adds column to existing databases
+
+4. **CLI Commands** (`cli/main.py`):
+   - Added `--sessions` / `-s` flag to `focus` command
+   - Added `focus-timer pause|resume|skip` command
+   - Added `focus-stop` command
+   - Control file mechanism (`~/Library/Application Support/CaptainsLog/focus_control.json`)
+   - Running focus session polls control file for commands
+
+5. **Widget Controller** (`widget/widget_controller.py`):
+   - `start_focus()` accepts `estimated_sessions` parameter
+   - Status file writes `estimated_sessions` and `daily_focus_minutes`
+
+6. **Goal Tracker** (`focus/goal_tracker.py`):
+   - `FocusGoal` dataclass includes `estimated_sessions` field
+   - `from_db_row()` and `to_db_dict()` handle the new field
+
+**Files Created**:
+- `MenuBarApp/CaptainsLogMenuBar.swift` - Native menu bar app
+- `MenuBarApp/build.sh` - Build script
+- `MenuBarApp/Info.plist` - App bundle config
+
+**Files Modified**:
+- `FocusWidget/FocusWidgetApp.swift` - Simplified to Compact + Mini only
+- `src/captains_log/storage/database.py` - Added estimated_sessions column
+- `src/captains_log/focus/goal_tracker.py` - Added estimated_sessions to FocusGoal
+- `src/captains_log/widget/widget_controller.py` - Added estimated_sessions support
+- `src/captains_log/cli/main.py` - Added --sessions flag and timer control commands
+
+**CLI Usage**:
+```bash
+# Start focus session with 4 pomodoro sessions
+captains-log focus -g "Deep work" -t 120 -a "VS Code,Terminal" --sessions 4
+
+# Control running session
+captains-log focus-timer pause
+captains-log focus-timer resume
+captains-log focus-stop
+```
+
+**Menu Bar Flow**:
+1. Click menu bar icon → popup appears
+2. Click "Start Focus Session" → form appears
+3. Enter task name, pick duration/sessions → click "Start Focus"
+4. Session runs, use Pause/Resume/End buttons to control
+5. Widget shows ambient timer + session dots
+
+**Status File** (`~/Library/Application Support/CaptainsLog/focus_status.json`):
+```json
+{
+  "active": true,
+  "goal_name": "Deep Work",
+  "target_minutes": 120,
+  "focus_minutes": 45.5,
+  "pomodoro_count": 2,
+  "estimated_sessions": 4,
+  "time_remaining": "18:42",
+  "timer_running": true,
+  "daily_focus_minutes": 45.5
+}
+```
+
+**Removed from Design**:
+- Progress bar (anxiety-inducing)
+- Percentage display (unnecessary cognitive load)
+- Pause/Skip/Reset buttons on widget (encourages fiddling)
+- Full widget mode (too much information)
+- Dashboard link from menu bar (to be added back with correct URL)
+
+**Known Issues / TODO**:
+- Dashboard link needs to be added back (user will specify URL)
+- Next.js frontend exists at `frontend/` (runs on port 3000)
+
 **Example Summary Output**:
 ```json
 {
@@ -612,3 +721,93 @@ CREATE TABLE pomodoro_history (
 - Add morning/evening briefings
 - Implement pattern detection from historical data
 - Add schedule optimizer based on focus patterns
+
+### 2026-01-18: Menu Bar UI Improvements & Product Roadmap
+
+**Completed**:
+
+1. **Menu Bar UI Fixes**:
+   - Fixed element sizing for uniform appearance (28px row heights, 14px icons)
+   - Added expandable subtasks for goals with chevron disclosure
+   - Removed large progress rings per user request
+   - Fixed "Today" row to show cumulative focus time from database (not just current session)
+   - Added fixed column widths (chevronWidth: 16px, streakWidth: 70px) to prevent layout jumping
+   - Added play button for goals without tasks to start 25m focus sessions
+
+2. **Floating Widget Fixes**:
+   - Fixed widget not appearing when starting focus sessions - added `NSWorkspace.shared.open()` call
+   - Fixed widget crashing on click - removed mode toggling and click handlers
+   - Removed HotkeyManager that was causing crashes on Cmd+Shift+M
+   - Added hover-to-show close button (X) for closing widget
+   - Added "Show Widget" button in menu bar for re-opening widget
+
+3. **Focus Session Switching Fix**:
+   - Fixed old session overwriting new session when switching tasks
+   - Added `pkill -f 'captains-log focus'` before starting new session
+   - Clear old status file before starting new session
+
+4. **Product Roadmap Created** (`ROADMAP.md`):
+   - 80-20 analysis of feature usage (daily vs weekly vs rarely used)
+   - Three perspectives: AI Developer, Product Designer, Growth Marketer
+   - Identified core loop: Start session → Timer glance → Daily total → Streaks
+   - Prioritized phases: Core Loop ✅ → Proactive AI → Emotional Design → Weekly Insights → Calendar Integration → Social/Growth
+
+5. **Calendar Integration Planning** (Next Phase):
+   - Decided on macOS EventKit (native) over Google Calendar API
+   - Designed CalendarManager.swift with permission handling, event fetching
+   - Created smart suggestions algorithm based on free time and goal streaks
+   - Designed 4 menu bar UI states for calendar integration
+
+**Files Created**:
+- `ROADMAP.md` - Comprehensive product roadmap with 80-20 analysis
+
+**Files Modified**:
+- `MenuBarApp/CaptainsLogMenuBar.swift`:
+  - Added `todayFocusMinutes` from database via goals-status JSON
+  - Fixed `startFocusSession()` to kill old process first
+  - Added "Show Widget" button
+  - Added play button for goals without tasks
+  - Fixed column widths for stable layout
+
+- `FocusWidget/FocusWidgetApp.swift`:
+  - Removed click handler and HotkeyManager
+  - Added hover-to-show close button
+
+- `src/captains_log/focus/productivity_goals.py`:
+  - Added `_get_today_total_focus_minutes()` method
+  - Updated `get_goals_status_json()` to include `today_focus_minutes` from database
+
+**Key Code Changes**:
+
+```swift
+// Kill old session before starting new one
+func startFocusSession(taskName: String, minutes: Int) {
+    let stopScript = "pkill -f 'captains-log focus' 2>/dev/null; sleep 0.3"
+    // ... run script
+
+    // Clear old status
+    let emptyStatus = "{\"active\": false}"
+    try? emptyStatus.write(toFile: statusFilePath, ...)
+
+    // Start new session + launch widget
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/FocusWidget.app"))
+    }
+}
+```
+
+```python
+# Get today's total focus minutes from database
+async def _get_today_total_focus_minutes(self) -> float:
+    today = date.today().isoformat()
+    row = await self.db.fetch_one(
+        "SELECT COALESCE(SUM(total_focus_minutes), 0) as total FROM focus_sessions WHERE date = ?",
+        (today,)
+    )
+    return float(row["total"]) if row else 0.0
+```
+
+**Next Steps**:
+- Implement Calendar Integration using macOS EventKit
+- Research existing productivity tools in market
+- Add morning/evening notification system

@@ -834,6 +834,12 @@ def focus(
         "-t",
         help="Target minutes for the goal",
     ),
+    sessions: int = typer.Option(
+        4,
+        "--sessions",
+        "-s",
+        help="Estimated Pomodoro sessions to complete the task",
+    ),
     apps: str = typer.Option(
         None,
         "--apps",
@@ -861,8 +867,8 @@ def focus(
     """Start a focus session with Pomodoro timer and goal tracking.
 
     Examples:
-        captains-log focus -g "Deep work" -t 120 -a "VS Code,Terminal"
-        captains-log focus -g "Writing docs" -p "captains-log"
+        captains-log focus -g "Deep work" -t 120 -a "VS Code,Terminal" --sessions 4
+        captains-log focus -g "Writing docs" -p "captains-log" -s 2
         captains-log focus  # Interactive mode
     """
     config = get_config()
@@ -875,6 +881,7 @@ def focus(
 
         goal = Prompt.ask("Goal name", default="Deep work")
         target = IntPrompt.ask("Target minutes", default=120)
+        sessions = IntPrompt.ask("Estimated sessions", default=4)
 
         app_input = Prompt.ask("Apps to track (comma-separated)", default="VS Code,Terminal")
         apps = app_input if app_input else None
@@ -884,7 +891,7 @@ def focus(
             project = None
 
     console.print(f"\n[green]Starting focus session:[/green] {goal}")
-    console.print(f"  Target: {target} minutes")
+    console.print(f"  Target: {target} minutes ({sessions} sessions)")
     if apps:
         console.print(f"  Apps: {apps}")
     if project:
@@ -915,6 +922,7 @@ def focus(
             session = await controller.start_focus(
                 goal_name=goal,
                 target_minutes=target,
+                estimated_sessions=sessions,
                 match_criteria=criteria,
                 tracking_mode=mode,
                 show_widget=not no_widget,
@@ -937,6 +945,19 @@ def focus(
                     )
                     await asyncio.sleep(0.1)
 
+                    # Check for control commands
+                    ctrl = read_focus_control()
+                    if ctrl:
+                        action = ctrl.get("action")
+                        if action == "pause":
+                            await controller.pause_timer()
+                        elif action == "resume":
+                            await controller.resume_timer()
+                        elif action == "skip":
+                            await controller.skip_timer()
+                        elif action == "stop":
+                            break
+
                     # Show status periodically
                     if controller.timer_state:
                         status = controller.get_status()
@@ -954,6 +975,18 @@ def focus(
             except ImportError:
                 # No PyObjC RunLoop, just use asyncio
                 while controller.is_active:
+                    # Check for control commands
+                    ctrl = read_focus_control()
+                    if ctrl:
+                        action = ctrl.get("action")
+                        if action == "pause":
+                            await controller.pause_timer()
+                        elif action == "resume":
+                            await controller.resume_timer()
+                        elif action == "skip":
+                            await controller.skip_timer()
+                        elif action == "stop":
+                            break
                     await asyncio.sleep(1)
 
         except KeyboardInterrupt:
@@ -1136,6 +1169,753 @@ def focus_goals(
 
     try:
         asyncio.run(manage_goals())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+
+# Control file for focus session commands
+FOCUS_CONTROL_FILE = Path.home() / "Library" / "Application Support" / "CaptainsLog" / "focus_control.json"
+
+
+def write_focus_control(action: str) -> None:
+    """Write a control command for the running focus session."""
+    import json
+    FOCUS_CONTROL_FILE.parent.mkdir(parents=True, exist_ok=True)
+    FOCUS_CONTROL_FILE.write_text(json.dumps({"action": action, "timestamp": datetime.now().isoformat()}))
+
+
+def read_focus_control() -> dict | None:
+    """Read and clear the control command."""
+    import json
+    if not FOCUS_CONTROL_FILE.exists():
+        return None
+    try:
+        data = json.loads(FOCUS_CONTROL_FILE.read_text())
+        FOCUS_CONTROL_FILE.unlink()  # Clear after reading
+        return data
+    except Exception:
+        return None
+
+
+@app.command(name="focus-timer")
+def focus_timer(
+    action: str = typer.Argument(..., help="Action: pause, resume, skip"),
+) -> None:
+    """Control the focus timer (pause, resume, skip)."""
+    if action not in ("pause", "resume", "skip", "start"):
+        console.print(f"[red]Unknown action: {action}[/red]")
+        console.print("Valid actions: pause, resume, skip")
+        raise typer.Exit(1)
+
+    # Map 'start' to 'resume' for consistency
+    if action == "start":
+        action = "resume"
+
+    write_focus_control(action)
+    console.print(f"[green]Sent {action} command[/green]")
+
+
+@app.command(name="focus-stop")
+def focus_stop() -> None:
+    """Stop the current focus session."""
+    write_focus_control("stop")
+    console.print("[yellow]Stopping focus session...[/yellow]")
+
+
+# =============================================================================
+# Time Optimization Commands
+# =============================================================================
+
+
+@app.command(name="optimize")
+def optimize_status() -> None:
+    """Show current time optimization metrics and status."""
+    config = get_config()
+
+    async def get_metrics():
+        from captains_log.storage.database import Database
+        from captains_log.optimization.deal_classifier import DEALClassifier
+        from captains_log.optimization.interrupt_detector import InterruptDetector
+        from captains_log.optimization.context_switch_analyzer import ContextSwitchAnalyzer
+        from captains_log.optimization.meeting_fragmentation import MeetingFragmentationAnalyzer
+        import json
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            today = datetime.utcnow()
+
+            # Get DEAL metrics
+            deal_classifier = DEALClassifier(db=db)
+            deal_metrics = await deal_classifier.get_daily_metrics(today)
+
+            # Get interrupt metrics
+            interrupt_detector = InterruptDetector(db=db)
+            interrupt_metrics = await interrupt_detector.get_daily_metrics(today)
+
+            # Get context switch metrics
+            switch_analyzer = ContextSwitchAnalyzer(db=db)
+            switch_metrics = await switch_analyzer.get_daily_metrics(today)
+
+            # Get fragmentation metrics
+            frag_analyzer = MeetingFragmentationAnalyzer(db=db)
+            frag_metrics = await frag_analyzer.analyze_day(today)
+
+            # Read optimization status file if exists
+            status_file = config.data_dir / "optimization_status.json"
+            status_data = {}
+            if status_file.exists():
+                try:
+                    status_data = json.loads(status_file.read_text())
+                except Exception:
+                    pass
+
+            return {
+                "deal": deal_metrics,
+                "interrupts": interrupt_metrics,
+                "switches": switch_metrics,
+                "fragmentation": frag_metrics,
+                "status": status_data,
+            }
+
+        finally:
+            await db.close()
+
+    try:
+        metrics = asyncio.run(get_metrics())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Status color indicator
+    status_color = metrics["status"].get("status_color", "green")
+    color_emoji = {"green": "🟢", "amber": "🟡", "red": "🔴"}.get(status_color, "⚪")
+
+    console.print(Panel(
+        f"{color_emoji} Time Optimization Status: [bold]{status_color.upper()}[/bold]",
+        title="Captain's Log Optimization",
+        border_style=status_color
+    ))
+    console.print()
+
+    # DEAL breakdown
+    deal = metrics["deal"]
+    table = Table(title="Time Distribution (DEAL Framework)", show_header=True, header_style="bold cyan")
+    table.add_column("Category")
+    table.add_column("Time")
+    table.add_column("Percent")
+    table.add_column("Description")
+
+    total = deal.total_minutes or 1  # Avoid division by zero
+
+    table.add_row(
+        "[green]Leverage[/green]",
+        f"{deal.leverage_minutes:.0f}m",
+        f"{deal.leverage_minutes/total*100:.0f}%",
+        "High-value work to protect"
+    )
+    table.add_row(
+        "[blue]Delegate[/blue]",
+        f"{deal.delegate_minutes:.0f}m",
+        f"{deal.delegate_minutes/total*100:.0f}%",
+        "Admin tasks others could do"
+    )
+    table.add_row(
+        "[red]Eliminate[/red]",
+        f"{deal.eliminate_minutes:.0f}m",
+        f"{deal.eliminate_minutes/total*100:.0f}%",
+        "Distractions to reduce"
+    )
+    table.add_row(
+        "[yellow]Automate[/yellow]",
+        f"{deal.automate_minutes:.0f}m",
+        f"{deal.automate_minutes/total*100:.0f}%",
+        "Repetitive patterns to batch"
+    )
+
+    console.print(table)
+    console.print()
+
+    # Key Metrics
+    table = Table(title="Today's Key Metrics", show_header=True, header_style="bold cyan")
+    table.add_column("Metric")
+    table.add_column("Value")
+    table.add_column("Status")
+
+    # Interrupts
+    interrupts = metrics["interrupts"]
+    interrupt_status = "[green]Good[/green]" if interrupts.total_interrupts < 15 else (
+        "[yellow]High[/yellow]" if interrupts.total_interrupts < 30 else "[red]Very High[/red]"
+    )
+    table.add_row(
+        "Interrupts",
+        str(interrupts.total_interrupts),
+        interrupt_status
+    )
+
+    # Context switches
+    switches = metrics["switches"]
+    switch_status = "[green]Good[/green]" if switches.total_switches < 30 else (
+        "[yellow]High[/yellow]" if switches.total_switches < 60 else "[red]Very High[/red]"
+    )
+    table.add_row(
+        "Context Switches",
+        str(switches.total_switches),
+        switch_status
+    )
+    table.add_row(
+        "  Est. Cost",
+        f"{switches.estimated_total_cost_minutes:.0f}m",
+        "[dim]Refocus time lost[/dim]"
+    )
+
+    # Fragmentation
+    frag = metrics["fragmentation"]
+    frag_status = "[green]Good[/green]" if frag.swiss_cheese_score < 0.3 else (
+        "[yellow]Fragmented[/yellow]" if frag.swiss_cheese_score < 0.6 else "[red]Swiss Cheese[/red]"
+    )
+    table.add_row(
+        "Swiss Cheese Score",
+        f"{frag.swiss_cheese_score:.2f}",
+        frag_status
+    )
+    table.add_row(
+        "  Meetings",
+        str(frag.total_meetings),
+        f"[dim]{frag.meeting_hours:.1f}h[/dim]"
+    )
+    table.add_row(
+        "  Largest Focus Block",
+        f"{frag.largest_focus_block_minutes:.0f}m",
+        "[dim]Usable time[/dim]"
+    )
+
+    console.print(table)
+    console.print()
+
+    # Potential savings
+    savings = deal.potential_savings_minutes
+    console.print(f"[bold]Potential Time Savings:[/bold] {savings:.0f} minutes/day")
+    console.print(f"[dim]Target: 20% (~96 min/day for 8h workday)[/dim]")
+
+
+@app.command(name="optimize-briefing")
+def optimize_briefing(
+    yesterday: bool = typer.Option(False, "--yesterday", "-y", help="Show yesterday's briefing"),
+) -> None:
+    """Show the daily optimization briefing."""
+    config = get_config()
+
+    async def get_briefing():
+        from captains_log.storage.database import Database
+        from captains_log.optimization.daily_briefing import DailyBriefingGenerator
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            generator = DailyBriefingGenerator(db=db)
+
+            target_date = datetime.utcnow()
+            if yesterday:
+                target_date = target_date - timedelta(days=1)
+
+            # Try to get existing briefing
+            briefing = await generator.get_briefing(target_date)
+
+            # Generate if not found
+            if not briefing:
+                briefing = await generator.generate_briefing(target_date)
+
+            return briefing
+
+        finally:
+            await db.close()
+
+    try:
+        briefing = asyncio.run(get_briefing())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    if not briefing:
+        console.print("[yellow]No briefing available[/yellow]")
+        return
+
+    # Display briefing
+    console.print(Panel(
+        f"[bold]{briefing.greeting}[/bold]",
+        border_style="blue"
+    ))
+    console.print()
+
+    # Yesterday's wins
+    if briefing.wins:
+        console.print("[bold green]Yesterday's Wins[/bold green]")
+        for win in briefing.wins:
+            improvement = f" (+{win.improvement_percent:.0f}%)" if win.improvement_percent else ""
+            console.print(f"  ✓ {win.message}{improvement}")
+        console.print()
+
+    # Yesterday's summary
+    console.print("[bold]Yesterday's Summary[/bold]")
+    console.print(f"  • Deep work: {briefing.yesterday_deep_work_hours:.1f} hours")
+    console.print(f"  • Interrupts: {briefing.yesterday_interrupts}")
+    console.print(f"  • Context switches: {briefing.yesterday_context_switches}")
+    console.print(f"  • Meetings: {briefing.yesterday_meeting_hours:.1f} hours")
+    console.print()
+
+    # Today's focus
+    if briefing.focus_suggestions:
+        console.print("[bold cyan]Today's Focus[/bold cyan]")
+        for suggestion in briefing.focus_suggestions:
+            console.print(f"  → {suggestion}")
+        console.print()
+
+    # Quick wins
+    if briefing.quick_wins:
+        console.print("[bold yellow]Quick Wins[/bold yellow]")
+        for qw in briefing.quick_wins:
+            priority_color = {"high": "red", "medium": "yellow", "low": "dim"}.get(qw.priority, "white")
+            console.print(f"  [{priority_color}]●[/{priority_color}] {qw.action}")
+            console.print(f"    [dim]→ {qw.estimated_benefit}[/dim]")
+        console.print()
+
+    # Week context
+    if briefing.week_progress:
+        console.print(f"[dim italic]{briefing.week_progress}[/dim italic]")
+
+
+@app.command(name="optimize-report")
+def optimize_report(
+    weeks_ago: int = typer.Option(0, "--weeks-ago", "-w", help="Generate report for N weeks ago"),
+) -> None:
+    """Generate comprehensive weekly optimization report."""
+    config = get_config()
+
+    async def get_report():
+        from captains_log.storage.database import Database
+        from captains_log.optimization.weekly_report import WeeklyReportGenerator
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            generator = WeeklyReportGenerator(
+                db=db,
+                target_savings_percent=config.optimization.target_savings_percent
+            )
+
+            week_start = None
+            if weeks_ago > 0:
+                today = datetime.utcnow()
+                week_start = today - timedelta(days=today.weekday() + 7 * weeks_ago)
+
+            # Try to get existing report
+            report = await generator.get_report(week_start)
+
+            # Generate if not found
+            if not report:
+                report = await generator.generate_report(week_start)
+
+            return report
+
+        finally:
+            await db.close()
+
+    console.print("[yellow]Generating weekly optimization report...[/yellow]\n")
+
+    try:
+        report = asyncio.run(get_report())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    if not report:
+        console.print("[yellow]No report available[/yellow]")
+        return
+
+    # Print the text report
+    console.print(report.to_text())
+
+
+@app.command(name="optimize-profile")
+def optimize_profile(
+    role: str = typer.Option(None, "--role", "-r", help="Your role (e.g., 'Software Engineer', 'Manager')"),
+    department: str = typer.Option(None, "--dept", "-d", help="Your department"),
+    hourly_rate: float = typer.Option(None, "--rate", help="Hourly rate for ROI calculations"),
+    work_hours: int = typer.Option(None, "--hours", "-h", help="Work hours per week"),
+    savings_goal: float = typer.Option(None, "--goal", "-g", help="Time savings goal (0.0-1.0, e.g., 0.20 for 20%)"),
+) -> None:
+    """Manage your time optimization profile."""
+    config = get_config()
+
+    async def manage_profile():
+        from captains_log.storage.database import Database
+        from captains_log.optimization.schemas import UserProfile
+        import json
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            # Try to get existing profile
+            existing = await db.fetch_one(
+                "SELECT * FROM user_profile ORDER BY id DESC LIMIT 1"
+            )
+
+            # If updating
+            if any([role, department, hourly_rate, work_hours, savings_goal]):
+                profile_data = {}
+                if existing:
+                    profile_data = {
+                        "role": existing.get("role"),
+                        "department": existing.get("department"),
+                        "hourly_rate": existing.get("hourly_rate", 0),
+                        "work_hours_per_week": existing.get("work_hours_per_week", 40),
+                        "time_savings_goal": existing.get("time_savings_goal", 0.20),
+                    }
+
+                # Update with new values
+                if role:
+                    profile_data["role"] = role
+                if department:
+                    profile_data["department"] = department
+                if hourly_rate is not None:
+                    profile_data["hourly_rate"] = hourly_rate
+                if work_hours is not None:
+                    profile_data["work_hours_per_week"] = work_hours
+                if savings_goal is not None:
+                    profile_data["time_savings_goal"] = savings_goal
+
+                # Save profile
+                profile_data["updated_at"] = datetime.utcnow().isoformat()
+                if not existing:
+                    profile_data["created_at"] = datetime.utcnow().isoformat()
+                    await db.insert("user_profile", profile_data)
+                else:
+                    await db.execute(
+                        """UPDATE user_profile SET
+                           role = ?, department = ?, hourly_rate = ?,
+                           work_hours_per_week = ?, time_savings_goal = ?, updated_at = ?
+                           WHERE id = ?""",
+                        (
+                            profile_data.get("role"),
+                            profile_data.get("department"),
+                            profile_data.get("hourly_rate"),
+                            profile_data.get("work_hours_per_week"),
+                            profile_data.get("time_savings_goal"),
+                            profile_data["updated_at"],
+                            existing["id"]
+                        )
+                    )
+
+                console.print("[green]Profile updated![/green]")
+                return profile_data
+            else:
+                # Just return existing
+                if existing:
+                    return dict(existing)
+                return None
+
+        finally:
+            await db.close()
+
+    try:
+        profile = asyncio.run(manage_profile())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    if not profile:
+        console.print("[dim]No profile configured. Set one up:[/dim]")
+        console.print('captains-log optimize-profile --role "Software Engineer" --dept "Engineering" --rate 75 --hours 40 --goal 0.20')
+        return
+
+    # Display profile
+    table = Table(title="Time Optimization Profile", show_header=False, box=None)
+    table.add_column("Field", style="cyan")
+    table.add_column("Value")
+
+    table.add_row("Role", profile.get("role") or "[dim]Not set[/dim]")
+    table.add_row("Department", profile.get("department") or "[dim]Not set[/dim]")
+
+    rate = profile.get("hourly_rate")
+    table.add_row("Hourly Rate", f"${rate:.2f}" if rate else "[dim]Not set[/dim]")
+
+    hours = profile.get("work_hours_per_week", 40)
+    table.add_row("Work Hours/Week", str(hours))
+
+    goal = profile.get("time_savings_goal", 0.20)
+    table.add_row("Savings Goal", f"{goal*100:.0f}%")
+
+    # Calculate target hours
+    target_hours = hours * goal
+    table.add_row("Target Savings", f"{target_hours:.1f}h/week")
+
+    console.print(table)
+
+
+@app.command(name="goals")
+def goals_cmd(
+    add: str = typer.Option(None, "--add", "-a", help="Add a new goal"),
+    hours: float = typer.Option(40.0, "--hours", "-h", help="Estimated hours for goal"),
+    deadline: str = typer.Option(None, "--deadline", "-d", help="Deadline (YYYY-MM-DD)"),
+    delete: int = typer.Option(None, "--delete", help="Delete goal by ID"),
+    list_all: bool = typer.Option(False, "--all", help="Show all goals including completed"),
+) -> None:
+    """Manage productivity goals (quarterly/half-year objectives)."""
+    config = get_config()
+
+    async def manage():
+        from captains_log.focus.productivity_goals import (
+            ProductivityGoalsManager,
+            ProductivityGoal,
+        )
+        from captains_log.storage.database import Database
+        from datetime import date
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            manager = ProductivityGoalsManager(db)
+
+            if add:
+                deadline_date = None
+                if deadline:
+                    try:
+                        deadline_date = date.fromisoformat(deadline)
+                    except ValueError:
+                        console.print(f"[red]Invalid date format: {deadline}. Use YYYY-MM-DD[/red]")
+                        return
+
+                goal = ProductivityGoal(
+                    name=add,
+                    estimated_hours=hours,
+                    deadline=deadline_date,
+                )
+                goal = await manager.create_goal(goal)
+                console.print(f"[green]Created goal #{goal.id}: {goal.name}[/green]")
+                console.print(f"  Estimated: {hours}h | Deadline: {deadline or 'None'}")
+                return
+
+            if delete:
+                await manager.delete_goal(delete)
+                console.print(f"[yellow]Deleted goal #{delete}[/yellow]")
+                return
+
+            # List goals
+            goals = await manager.list_goals(active_only=not list_all, limit=10)
+
+            if not goals:
+                console.print("[dim]No goals found. Create one with --add[/dim]")
+                console.print('[dim]Example: captains-log goals --add "Q1 Project" --hours 80 --deadline 2025-03-31[/dim]')
+                return
+
+            table = Table(title="Productivity Goals", show_header=True, header_style="bold cyan")
+            table.add_column("ID")
+            table.add_column("Goal")
+            table.add_column("Est.")
+            table.add_column("Progress")
+            table.add_column("Daily Target")
+            table.add_column("Deadline")
+
+            for g in goals:
+                progress = f"{g.progress_percent:.0f}%"
+                daily = f"{g.daily_target_minutes:.0f}m"
+                deadline_str = g.deadline.isoformat() if g.deadline else "-"
+
+                # Color code by status
+                today_status = g.get_today_status()
+                if today_status.value == "green":
+                    status_color = "green"
+                elif today_status.value == "amber":
+                    status_color = "yellow"
+                elif today_status.value == "red":
+                    status_color = "red"
+                else:
+                    status_color = "dim"
+
+                table.add_row(
+                    str(g.id),
+                    g.name,
+                    f"{g.estimated_hours:.0f}h",
+                    f"[{status_color}]{progress}[/{status_color}]",
+                    daily,
+                    deadline_str
+                )
+
+            console.print(table)
+
+        finally:
+            await db.close()
+
+    try:
+        asyncio.run(manage())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command(name="tasks")
+def tasks_cmd(
+    goal_id: int = typer.Option(None, "--goal", "-g", help="Goal ID to list/add tasks for"),
+    add: str = typer.Option(None, "--add", "-a", help="Add a new task"),
+    minutes: int = typer.Option(30, "--minutes", "-m", help="Estimated minutes for task"),
+    complete: int = typer.Option(None, "--complete", "-c", help="Complete task by ID"),
+    delete: int = typer.Option(None, "--delete", help="Delete task by ID"),
+) -> None:
+    """Manage tasks within productivity goals."""
+    config = get_config()
+
+    async def manage():
+        from captains_log.focus.productivity_goals import (
+            ProductivityGoalsManager,
+            GoalTask,
+        )
+        from captains_log.storage.database import Database
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            manager = ProductivityGoalsManager(db)
+
+            if add:
+                if not goal_id:
+                    console.print("[red]Please specify --goal ID when adding a task[/red]")
+                    return
+
+                task = GoalTask(
+                    goal_id=goal_id,
+                    name=add,
+                    estimated_minutes=minutes,
+                )
+                task = await manager.create_task(task)
+                console.print(f"[green]Created task #{task.id}: {task.name} ({minutes}m)[/green]")
+                return
+
+            if complete:
+                await manager.complete_task(complete)
+                console.print(f"[green]Completed task #{complete}[/green]")
+                return
+
+            if delete:
+                await manager.delete_task(delete)
+                console.print(f"[yellow]Deleted task #{delete}[/yellow]")
+                return
+
+            # List tasks
+            goals = await manager.list_goals(active_only=True, limit=5)
+
+            if not goals:
+                console.print("[dim]No goals found. Create one first with: captains-log goals --add[/dim]")
+                return
+
+            for g in goals:
+                if goal_id and g.id != goal_id:
+                    continue
+
+                console.print(f"\n[bold]{g.name}[/bold] ({g.estimated_hours:.0f}h)")
+
+                tasks = g.tasks
+                if not tasks:
+                    console.print("  [dim]No tasks. Add with: captains-log tasks --goal {g.id} --add \"Task name\"[/dim]")
+                    continue
+
+                for t in tasks:
+                    status = "[green]✓[/green]" if t.is_completed else "○"
+                    console.print(f"  {status} #{t.id} {t.name} ({t.estimated_minutes}m)")
+                    for sub in t.subtasks:
+                        sub_status = "[green]✓[/green]" if sub.is_completed else "○"
+                        console.print(f"    {sub_status} #{sub.id} {sub.name} ({sub.estimated_minutes}m)")
+
+        finally:
+            await db.close()
+
+    try:
+        asyncio.run(manage())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command(name="goals-status")
+def goals_status_cmd() -> None:
+    """Show productivity goals status as JSON (for menu bar widget)."""
+    config = get_config()
+
+    async def get_status():
+        from captains_log.focus.productivity_goals import ProductivityGoalsManager
+        from captains_log.storage.database import Database
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            manager = ProductivityGoalsManager(db)
+            return await manager.get_goals_status_json()
+        finally:
+            await db.close()
+
+    try:
+        json_str = asyncio.run(get_status())
+        console.print(json_str)
+    except Exception as e:
+        console.print(f'{{"error": "{e}"}}')
+        raise typer.Exit(1)
+
+
+@app.command(name="settings")
+def settings_cmd(
+    pomodoro: int = typer.Option(None, "--pomodoro", "-p", help="Default pomodoro duration in minutes"),
+    target_mode: str = typer.Option(None, "--target-mode", "-t", help="Target mode: fixed or rolling"),
+) -> None:
+    """Manage app settings."""
+    config = get_config()
+
+    async def manage():
+        from captains_log.focus.productivity_goals import ProductivityGoalsManager, TargetMode
+        from captains_log.storage.database import Database
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            manager = ProductivityGoalsManager(db)
+
+            if pomodoro is not None:
+                await manager.set_setting("default_pomodoro_minutes", str(pomodoro))
+                console.print(f"[green]Set default pomodoro to {pomodoro} minutes[/green]")
+
+            if target_mode is not None:
+                if target_mode not in ("fixed", "rolling"):
+                    console.print("[red]Invalid target mode. Use 'fixed' or 'rolling'[/red]")
+                    return
+                await manager.set_setting("target_mode", target_mode)
+                console.print(f"[green]Set target mode to {target_mode}[/green]")
+
+            # Show current settings
+            pom = await manager.get_default_pomodoro_minutes()
+            mode = await manager.get_target_mode()
+
+            table = Table(title="App Settings", show_header=True, header_style="bold cyan")
+            table.add_column("Setting")
+            table.add_column("Value")
+
+            table.add_row("Default Pomodoro", f"{pom} minutes")
+            table.add_row("Target Mode", mode.value)
+
+            console.print(table)
+
+        finally:
+            await db.close()
+
+    try:
+        asyncio.run(manage())
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1)

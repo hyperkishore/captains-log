@@ -317,8 +317,12 @@ if PYOBJC_AVAILABLE:
             """Set a callback for widget actions."""
             self._callbacks[name] = callback
 
-        def update_state(self, state: WidgetState):
-            """Update the widget display with new state."""
+        def updateState_(self, state: WidgetState):
+            """Update the widget display with new state.
+
+            Note: Named with underscore suffix for PyObjC selector compatibility.
+            Called via performSelectorOnMainThread_withObject_waitUntilDone_.
+            """
             self._state = state
 
             # Update timer
@@ -501,7 +505,7 @@ if PYOBJC_AVAILABLE:
             if self._view:
                 # Must update UI on main thread
                 self._view.performSelectorOnMainThread_withObject_waitUntilDone_(
-                    "update_state:",
+                    "updateState:",
                     state,
                     False
                 )
