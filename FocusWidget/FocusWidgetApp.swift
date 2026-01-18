@@ -3,7 +3,7 @@ import AppKit
 
 // MARK: - Focus Session Data
 class FocusSessionData: ObservableObject {
-    @Published var goalName: String = "Deep Work"
+    @Published var goalName: String = ""  // Empty until loaded from status file
     @Published var targetMinutes: Int = 120
     @Published var focusMinutes: Double = 0.0
     @Published var pomodoroCount: Int = 0
@@ -43,9 +43,17 @@ class FocusSessionData: ObservableObject {
         // Store previous values for change detection
         let oldPhase = timerPhase
         let oldRemaining = timeRemaining
+        let wasActive = isActive
 
         if let active = json["active"] as? Bool { isActive = active }
         if let goal = json["goal_name"] as? String { goalName = goal }
+
+        // Auto-close widget when session stops (BUG-008 fix)
+        if wasActive && !isActive {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                NSApplication.shared.terminate(nil)
+            }
+        }
         if let target = json["target_minutes"] as? Int { targetMinutes = target }
         if let focus = json["focus_minutes"] as? Double { focusMinutes = focus }
         if let pomodoros = json["pomodoro_count"] as? Int { pomodoroCount = pomodoros }
@@ -99,9 +107,11 @@ struct FloatingWidgetView: View {
     @ObservedObject var sessionData: FocusSessionData
     @State private var isHovering: Bool = false
 
+    private let venvPath = NSHomeDirectory() + "/Desktop/Claude-experiments/captains-log/.venv"
+
     var body: some View {
         HStack(spacing: 10) {
-            Text(sessionData.goalName)
+            Text(sessionData.goalName.isEmpty ? "Loading..." : sessionData.goalName)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.primary)
                 .lineLimit(1)
@@ -117,8 +127,22 @@ struct FloatingWidgetView: View {
                 total: sessionData.estimatedSessions
             )
 
-            // Close button - visible on hover
+            // Controls - visible on hover
             if isHovering {
+                // Pause/Play button
+                Button(action: {
+                    togglePause()
+                }) {
+                    Image(systemName: sessionData.timerRunning ? "pause.fill" : "play.fill")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.blue)
+                        .frame(width: 16, height: 16)
+                        .background(Color.blue.opacity(0.15))
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
+                // Close button
                 Button(action: {
                     NSApplication.shared.terminate(nil)
                 }) {
@@ -159,6 +183,20 @@ struct FloatingWidgetView: View {
         case "short_break": return .green
         case "long_break": return .blue
         default: return .primary
+        }
+    }
+
+    func togglePause() {
+        let command = sessionData.timerRunning
+            ? "\"\(venvPath)/bin/captains-log\" focus-timer pause"
+            : "\"\(venvPath)/bin/captains-log\" focus-timer start"
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = ["-c", command]
+            process.environment = ["PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"]
+            try? process.run()
         }
     }
 }
