@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from captains_log.ai.batch_processor import BatchProcessor
 from captains_log.core.config import Config, get_config
+from captains_log.optimization.optimization_engine import OptimizationEngine
 from captains_log.sync.cloud_sync import CloudSync
 from captains_log.core.permissions import PermissionManager
 from captains_log.storage.database import Database, init_database
@@ -60,6 +61,9 @@ class Orchestrator:
         self.batch_processor: BatchProcessor | None = None
         self.summarizer: FiveMinuteSummarizer | None = None
         self.focus_calculator: FocusCalculator | None = None
+
+        # Time optimization engine
+        self.optimization_engine: OptimizationEngine | None = None
 
         # Cloud sync
         self.cloud_sync: CloudSync | None = None
@@ -277,6 +281,22 @@ class Orchestrator:
                     logger.warning(f"Failed to initialize cloud sync: {e}")
                     self.cloud_sync = None
 
+            # Initialize time optimization engine (optional)
+            if self.config.optimization.enabled:
+                try:
+                    self.optimization_engine = OptimizationEngine(
+                        db=self.db,
+                        config=self.config.optimization,
+                        data_dir=self.config.data_dir,
+                    )
+                    await self.optimization_engine.start()
+                    logger.info(
+                        f"Time optimization started (goal: {self.config.optimization.target_savings_percent}% savings)"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to initialize optimization engine: {e}")
+                    self.optimization_engine = None
+
             logger.info("Captain's Log daemon started successfully")
 
         except Exception as e:
@@ -292,6 +312,11 @@ class Orchestrator:
         logger.info("Stopping Captain's Log daemon...")
 
         self._running = False
+
+        # Stop optimization engine
+        if self.optimization_engine:
+            await self.optimization_engine.stop()
+            self.optimization_engine = None
 
         # Stop cloud sync
         if self.cloud_sync:
@@ -426,6 +451,21 @@ class Orchestrator:
 
             # Add to buffer
             self.buffer.add(event)
+
+            # Feed to optimization engine for interrupt/context switch analysis
+            if self.optimization_engine:
+                try:
+                    asyncio.create_task(
+                        self.optimization_engine.on_activity(
+                            timestamp=app_info.timestamp,
+                            app_name=app_info.app_name,
+                            bundle_id=app_info.bundle_id,
+                            window_title=window_title,
+                            work_category=work_context.category if work_context else None,
+                        )
+                    )
+                except Exception as e:
+                    logger.debug(f"Optimization tracking error: {e}")
 
             # Log with work context info
             context_info = ""
@@ -672,6 +712,21 @@ class Orchestrator:
         # Cloud sync status
         if self.cloud_sync:
             health["cloud_sync"] = self.cloud_sync.status
+
+        # Time optimization status
+        if self.optimization_engine:
+            try:
+                summary = await self.optimization_engine.get_daily_summary()
+                health["optimization"] = {
+                    "enabled": True,
+                    "status_color": summary.get("status_color", "unknown"),
+                    "interrupts_today": summary.get("interrupts", {}).get("total_interrupts", 0),
+                    "deep_work_hours": summary.get("deep_work_hours", 0),
+                }
+            except Exception as e:
+                health["optimization"] = {"enabled": True, "error": str(e)}
+        else:
+            health["optimization"] = {"enabled": False}
 
         return health
 

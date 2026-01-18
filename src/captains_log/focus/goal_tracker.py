@@ -33,6 +33,7 @@ class FocusGoal:
             name="Deep work on captains-log",
             goal_type=GoalType.PROJECT_BASED,
             target_minutes=120,
+            estimated_sessions=4,
             match_criteria=MatchCriteria(
                 apps=["VS Code", "Terminal"],
                 projects=["captains-log"]
@@ -43,6 +44,7 @@ class FocusGoal:
     name: str = ""
     goal_type: GoalType = GoalType.APP_BASED
     target_minutes: int = 120  # 2 hours default
+    estimated_sessions: int = 4  # Number of pomodoro sessions to complete task
     match_criteria: MatchCriteria = field(default_factory=MatchCriteria)
     is_active: bool = True
     created_at: datetime = field(default_factory=datetime.now)
@@ -61,6 +63,7 @@ class FocusGoal:
             name=row.get("name", ""),
             goal_type=GoalType(row.get("goal_type", "app_based")),
             target_minutes=row.get("target_minutes", 120),
+            estimated_sessions=row.get("estimated_sessions", 4),
             match_criteria=MatchCriteria.from_dict(criteria_dict),
             is_active=bool(row.get("is_active", True)),
             created_at=datetime.fromisoformat(row["created_at"]) if row.get("created_at") else datetime.now(),
@@ -72,6 +75,7 @@ class FocusGoal:
             "name": self.name,
             "goal_type": self.goal_type.value,
             "target_minutes": self.target_minutes,
+            "estimated_sessions": self.estimated_sessions,
             "match_criteria": json.dumps(self.match_criteria.to_dict()),
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat(),

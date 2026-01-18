@@ -100,6 +100,67 @@ class FocusConfig(BaseModel):
     default_goal_minutes: int = Field(default=120, ge=15, le=480, description="Default daily goal")
 
 
+class OptimizationConfig(BaseModel):
+    """Time optimization engine configuration."""
+
+    enabled: bool = Field(default=True, description="Enable time optimization features")
+
+    # Analysis settings
+    interrupt_threshold_seconds: int = Field(
+        default=30, ge=5, le=120,
+        description="Max duration for 'quick check' classification"
+    )
+    deep_work_min_minutes: int = Field(
+        default=25, ge=10, le=60,
+        description="Minimum duration for deep work block"
+    )
+
+    # DEAL classification thresholds
+    repetitive_task_min_occurrences: int = Field(
+        default=5, ge=2, le=20,
+        description="Min occurrences to flag as repetitive/automatable"
+    )
+
+    # Nudge settings
+    enable_nudges: bool = Field(default=True, description="Enable real-time nudges")
+    nudge_cooldown_minutes: int = Field(
+        default=30, ge=10, le=120,
+        description="Minimum time between nudges"
+    )
+    interrupt_nudge_threshold: int = Field(
+        default=6, ge=2, le=20,
+        description="Interrupts per hour to trigger nudge"
+    )
+
+    # Briefing settings
+    morning_briefing_enabled: bool = Field(default=True, description="Enable morning briefing")
+    morning_briefing_time: str = Field(
+        default="09:00",
+        description="Time for morning briefing (HH:MM)"
+    )
+    weekly_report_enabled: bool = Field(default=True, description="Enable weekly report")
+    weekly_report_day: str = Field(
+        default="monday",
+        description="Day for weekly report (lowercase)"
+    )
+
+    # Goals
+    target_savings_percent: int = Field(
+        default=20, ge=5, le=50,
+        description="Target time savings percentage"
+    )
+    ideal_deep_work_hours: float = Field(
+        default=4.0, ge=1.0, le=8.0,
+        description="Daily deep work goal in hours"
+    )
+
+    # Status file for menu bar integration
+    write_status_file: bool = Field(
+        default=True,
+        description="Write optimization_status.json for menu bar"
+    )
+
+
 class Config(BaseSettings):
     """Main application configuration."""
 
@@ -130,6 +191,7 @@ class Config(BaseSettings):
     web: WebConfig = Field(default_factory=WebConfig)
     sync: SyncConfig = Field(default_factory=SyncConfig)
     focus: FocusConfig = Field(default_factory=FocusConfig)
+    optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
 
     @property
     def db_path(self) -> Path:
