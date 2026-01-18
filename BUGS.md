@@ -48,6 +48,50 @@
   - `recommendations` - optimization suggestions
 - **Verification**: `captains-log optimize` now runs successfully
 
+### BUG-005: Goal popup shows wrong name before switching
+- **Journey**: MB-7 (Click task starts focus session)
+- **Severity**: Medium
+- **Status**: ✅ FIXED
+- **Description**: When clicking on a goal like "Study SwiftUI basics", the popup briefly shows "Deep Work" before switching to the correct goal name
+- **Root Cause**: Default value `goalName = "Deep Work"` in FocusWidgetApp.swift line 6
+- **Fix Applied**:
+  1. Changed default `goalName` from "Deep Work" to empty string
+  2. Widget now shows "Loading..." until real goal name is loaded
+- **File Changed**: `FocusWidget/FocusWidgetApp.swift`
+- **Verification**: Rebuild and reinstall FocusWidget.app
+
+### BUG-006: No pause button visible on focus widget hover
+- **Journey**: MB-10 (Pause/Resume)
+- **Severity**: Medium
+- **Status**: ✅ FIXED
+- **Description**: When hovering over the focus widget popup, only the close (X) button is visible, no pause button
+- **Fix Applied**:
+  1. Added pause/play toggle button next to close button (shows on hover)
+  2. Button calls `captains-log focus-timer pause/start` command
+  3. Icon changes based on `timerRunning` state
+- **File Changed**: `FocusWidget/FocusWidgetApp.swift`
+- **Verification**: Rebuild and reinstall FocusWidget.app, hover over widget to see pause button
+
+### BUG-007: Grey dot on right side of popup
+- **Journey**: MB-2 (Popover opens)
+- **Severity**: Low
+- **Status**: ✅ NOT A BUG
+- **Description**: Grey dot is the unfilled session dots (●●○○) showing progress like "2 of 4 sessions"
+- **Resolution**: This is expected behavior - shows session progress
+
+### BUG-008: Focus widget doesn't close when session stops
+- **Journey**: MB-11 (Stop session)
+- **Severity**: High
+- **Status**: ✅ FIXED
+- **Description**: When pressing "Stop" on the popup, the floating widget doesn't disappear - only the timer stops. User must manually press X to close.
+- **Root Cause**: Widget's `refresh()` function read `isActive` but never acted on it becoming `false`
+- **Fix Applied**:
+  1. Added `wasActive` tracking in `refresh()` function
+  2. When `isActive` changes from `true` to `false`, widget auto-terminates after 0.5s delay
+  3. Menu bar's `stopSession()` writes `{active: false}` to status file, triggering widget close
+- **File Changed**: `FocusWidget/FocusWidgetApp.swift`
+- **Verification**: Start focus session, press Stop, widget should auto-close
+
 ### BUG-002: Navigation links not working in React frontend (client-side routing)
 - **Journey**: WD-7 (Navigation to Time Analysis)
 - **Severity**: P2

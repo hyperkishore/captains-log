@@ -356,7 +356,7 @@ bash "/Users/kishore/Library/Application Support/SwiftBar/Plugins/captains-log.1
 - Minor (Y): New features, significant improvements
 - Patch (Z): Bug fixes, small changes
 
-**Current Version: 0.2.0**
+**Current Version: 0.2.02**
 
 ### 5. Testing Changes
 ```bash
