@@ -360,3 +360,137 @@ User focuses → Sees progress → Shares achievement
 - Team collaboration
 - Mobile apps
 - AI chat interfaces
+
+---
+
+## Market Research: Competitive Landscape (January 2026)
+
+### Category 1: Automatic Time Tracking
+
+| Tool | Strengths | Weaknesses | Pricing |
+|------|-----------|------------|---------|
+| **RescueTime** | Fully automatic tracking, Focus Sessions, distraction blocking, AI insights | Web-only analytics, no local data, limited Mac app, outdated UI | $78-144/year |
+| **Timing (Mac)** | Mac-native, beautiful UI, local data, 10+ years of development | Mac-only, subscription required, no focus mode | ~$60/year |
+| **ActivityWatch** | Open-source, privacy-first, local storage, cross-platform | No AI insights, no focus features, technical setup | Free |
+| **Rize** | AI-powered insights, burnout detection, break reminders | Subscription required, web-focused | ~$100/year |
+
+**Key Insight**: RescueTime dominates but users complain about web-only experience. Timing is loved by Mac users for its local-first approach. Neither combines automatic tracking with goal-based focus sessions.
+
+### Category 2: Focus/Pomodoro Apps
+
+| Tool | Strengths | Weaknesses | Pricing |
+|------|-----------|------------|---------|
+| **Flow (Mac)** | Beautiful design, Apple ecosystem integration, widgets | No automatic tracking, no activity insights | $5/month |
+| **Forest** | Gamification (grow trees), real tree planting | Mobile-first, no desktop analytics | $4 one-time |
+| **Be Focused** | Apple-native, simple Pomodoro | No automatic tracking, basic features | Free/Premium |
+| **Focus To-Do** | Combines Pomodoro with task management | Complex UI, no activity tracking | Freemium |
+
+**Key Insight**: Focus apps are either (1) simple timers without insights or (2) complex task managers. None automatically track what you're actually doing during focus time.
+
+### Category 3: Calendar-Aware Scheduling
+
+| Tool | Strengths | Weaknesses | Pricing |
+|------|-----------|------------|---------|
+| **Reclaim.ai** | AI scheduling, Focus Time protection, Microsoft/Google integration | Team-focused, complex setup, subscription | $8-15/user/month |
+| **Clockwise** | Focus time blocks, team sync, MCP integration | Enterprise-focused, Google Calendar only | $6-12/user/month |
+| **Motion** | AI task scheduling, automatic rescheduling | Complex, expensive, overkill for individuals | $19/month |
+
+**Key Insight**: Calendar tools focus on *scheduling* focus time, not *tracking* whether you actually focused. They're team-oriented and require significant setup.
+
+### Category 4: Screen Time Monitoring
+
+| Tool | Strengths | Weaknesses | Pricing |
+|------|-----------|------------|---------|
+| **macOS Screen Time** | Built-in, free, app limits | No productivity insights, no goals | Free |
+| **Flipd** | Focus lock mode, group challenges | Mobile-first, no Mac analytics | Freemium |
+| **Freedom** | Cross-platform blocking, scheduled sessions | No tracking/analytics, just blocking | $7/month |
+
+**Key Insight**: These tools block distractions but don't help you understand where your time goes or build focus habits.
+
+---
+
+## Captain's Log Differentiation
+
+### Our Unique Position
+
+**The Gap We Fill**: No existing tool combines:
+1. Automatic passive tracking (like RescueTime)
+2. Goal-based focus sessions (like Flow)
+3. Calendar awareness (like Reclaim)
+4. Local-first privacy (like ActivityWatch)
+5. AI-powered insights (like Rize)
+
+### Competitive Advantages
+
+| Feature | Captain's Log | RescueTime | Flow | Reclaim |
+|---------|--------------|------------|------|---------|
+| Automatic tracking | ✅ | ✅ | ❌ | ❌ |
+| Local-first data | ✅ | ❌ | ✅ | ❌ |
+| Goal-based focus | ✅ | ❌ | ✅ | ❌ |
+| Visual streaks | ✅ | ❌ | ❌ | ❌ |
+| Calendar integration | Planned | ❌ | ❌ | ✅ |
+| AI insights | ✅ | ✅ | ❌ | ❌ |
+| Menu bar presence | ✅ | ❌ | ✅ | ❌ |
+| Floating widget | ✅ | ❌ | ✅ | ❌ |
+| macOS native | ✅ | ❌ | ✅ | ❌ |
+
+### Target User
+
+**Primary Persona**: Solo knowledge worker (developer, writer, designer) who:
+- Works primarily on Mac
+- Values privacy (doesn't want data in the cloud)
+- Wants to understand where time goes without manual tracking
+- Uses Pomodoro/focus techniques for deep work
+- Cares about building consistent habits (streaks)
+
+**NOT our user**:
+- Teams needing shared analytics
+- Freelancers needing billing/invoicing
+- Mobile-first workers
+- Enterprise compliance requirements
+
+---
+
+## Research-Backed Design Decisions
+
+### From Cal Newport's Deep Work Philosophy
+
+> "Focus creates happiness... the satisfaction at the end of a focused day is built-in."
+
+**Applied in Captain's Log**:
+- Session completion celebration (emotional reward)
+- Daily focus total (visible progress)
+- Streak visualization (habit formation)
+
+### From Behavioral Psychology (Habit Loop)
+
+**CUE → ROUTINE → REWARD → INVESTMENT**
+
+| Stage | Captain's Log Implementation |
+|-------|------------------------------|
+| Cue | Menu bar icon shows daily time |
+| Routine | One-click focus start |
+| Reward | Streak update, completion sound |
+| Investment | Goals with multi-day progress |
+
+### From Market Data (2025-2026)
+
+- **37%** of professional time spent in meetings (opportunity for calendar integration)
+- **23 hours/week** average executive meeting time (need meeting-heavy warnings)
+- **6 hours/week** lost to context switching (need gentle nudges)
+- **7.6 hours/week** saved by AI scheduling tools (opportunity for smart suggestions)
+- **26 minutes/day** saved by AI productivity tools (validates AI-powered approach)
+
+---
+
+## Sources
+
+- [Toggl: Best Time Tracking Apps 2026](https://toggl.com/blog/best-time-tracking-apps)
+- [Timing: Mac Time Tracking Apps](https://timingapp.com/blog/mac-time-tracking-apps/)
+- [Reclaim: Best Pomodoro Timer Apps](https://reclaim.ai/blog/best-pomodoro-timer-apps)
+- [Zapier: Best Pomodoro Apps](https://zapier.com/blog/best-pomodoro-apps/)
+- [Reclaim.ai](https://reclaim.ai)
+- [Clockwise](https://max-productive.ai/ai-tools/clockwise/)
+- [Flow App](https://www.flow.app/)
+- [ActivityWatch](https://activitywatch.net/)
+- [Cal Newport: Time Block Planner](https://www.timeblockplanner.com/)
