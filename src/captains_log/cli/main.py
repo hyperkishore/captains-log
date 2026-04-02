@@ -1921,6 +1921,396 @@ def settings_cmd(
         raise typer.Exit(1)
 
 
+@app.command()
+def today() -> None:
+    """Show today's activity summary — quick glanceable view."""
+    config = get_config()
+
+    async def get_today():
+        from captains_log.notifications.daily_digest import DailyDigestGenerator
+        from captains_log.storage.database import Database
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            generator = DailyDigestGenerator(db)
+            return await generator.generate()
+        finally:
+            await db.close()
+
+    try:
+        digest = asyncio.run(get_today())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    if digest.total_active_minutes < 1:
+        console.print(Panel(
+            "[yellow]No activity recorded today.[/yellow]\n\n"
+            "Is the daemon running? Check: captains-log status",
+            title="Today",
+            border_style="yellow",
+        ))
+        return
+
+    console.print(Panel(
+        digest.to_rich_text(),
+        title=f"Today — {digest.date}",
+        border_style="green",
+    ))
+
+
+@app.command()
+def digest(
+    date: str = typer.Option(
+        None, "--date", "-d",
+        help="Date to generate digest for (YYYY-MM-DD, default: today)",
+    ),
+    notify: bool = typer.Option(
+        False, "--notify", "-n",
+        help="Send as macOS notification",
+    ),
+) -> None:
+    """Generate and display the daily digest."""
+    config = get_config()
+
+    async def get_digest():
+        from captains_log.notifications.daily_digest import DailyDigestGenerator
+        from captains_log.storage.database import Database
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            target = datetime.strptime(date, "%Y-%m-%d") if date else datetime.now()
+            generator = DailyDigestGenerator(db)
+            return await generator.generate(target)
+        finally:
+            await db.close()
+
+    try:
+        d = asyncio.run(get_digest())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    console.print(Panel(
+        d.to_rich_text(),
+        title=f"Daily Digest — {d.date}",
+        border_style="blue",
+    ))
+
+    if notify:
+        from captains_log.notifications.notifier import send_notification
+
+        send_notification(
+            title=d.notification_title,
+            body=d.notification_body,
+            subtitle=d.notification_subtitle,
+            sound="Pop",
+        )
+        console.print("[green]Notification sent[/green]")
+
+
+@app.command()
+def week() -> None:
+    """Show this week vs last week comparison."""
+    config = get_config()
+
+    async def get_week_data():
+        from captains_log.notifications.daily_digest import DailyDigestGenerator
+        from captains_log.storage.database import Database
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            now = datetime.now()
+
+            # This week: Monday to today
+            days_since_monday = now.weekday()
+            this_monday = now - timedelta(days=days_since_monday)
+            last_monday = this_monday - timedelta(days=7)
+
+            generator = DailyDigestGenerator(db)
+
+            # Compute each day this week
+            this_week_days = []
+            for i in range(days_since_monday + 1):
+                day = this_monday + timedelta(days=i)
+                d = await generator.generate(day)
+                this_week_days.append(d)
+
+            # Compute each day last week
+            last_week_days = []
+            for i in range(7):
+                day = last_monday + timedelta(days=i)
+                d = await generator.generate(day)
+                last_week_days.append(d)
+
+            return this_week_days, last_week_days, days_since_monday
+        finally:
+            await db.close()
+
+    try:
+        this_week, last_week, days_done = asyncio.run(get_week_data())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    this_total = sum(d.total_active_minutes for d in this_week)
+    last_total = sum(d.total_active_minutes for d in last_week)
+
+    # Format hours
+    def fmt_hours(mins: float) -> str:
+        h = int(mins // 60)
+        m = int(mins % 60)
+        return f"{h}h {m}m" if h > 0 else f"{m}m"
+
+    lines = []
+    lines.append(f"  This week:  {fmt_hours(this_total)}  ({days_done + 1} days)")
+    lines.append(f"  Last week:  {fmt_hours(last_total)}  (7 days)")
+
+    if last_total > 0:
+        # Compare proportionally (this_week extrapolated to 7 days)
+        if days_done > 0:
+            projected = (this_total / (days_done + 1)) * 7
+            diff = ((projected - last_total) / last_total) * 100
+            direction = "up" if diff > 0 else "down"
+            color = "green" if diff > 0 else "red"
+            lines.append(f"  Trend:      [{color}]{abs(diff):.0f}% {direction}[/{color}] (projected)")
+    lines.append("")
+
+    # Per-day breakdown
+    lines.append("  Day-by-day:")
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    for i, d in enumerate(this_week):
+        bar_len = int(d.total_active_minutes / 30) if d.total_active_minutes > 0 else 0
+        bar = "\u2588" * min(bar_len, 20)
+        lines.append(f"    {day_names[i]}  {fmt_hours(d.total_active_minutes):>7}  {bar}")
+
+    # Top apps across the week
+    app_totals: dict[str, float] = {}
+    for d in this_week:
+        for a in d.top_apps:
+            app_totals[a.app_name] = app_totals.get(a.app_name, 0) + a.minutes
+
+    if app_totals:
+        lines.append("")
+        lines.append("  Top apps this week:")
+        sorted_apps = sorted(app_totals.items(), key=lambda x: x[1], reverse=True)[:5]
+        for name, mins in sorted_apps:
+            lines.append(f"    {name:<20} {fmt_hours(mins)}")
+
+    console.print(Panel(
+        "\n".join(lines),
+        title="Week Summary",
+        border_style="blue",
+    ))
+
+
+@app.command()
+def recall(
+    query: str = typer.Argument(
+        ...,
+        help="Natural language query about your activity history",
+    ),
+) -> None:
+    """Ask questions about your activity history using AI.
+
+    Examples:
+        captains-log recall "what did I work on last Thursday"
+        captains-log recall "how much time in Slack this week"
+        captains-log recall "my most productive day last week"
+    """
+    config = get_config()
+
+    api_key = config.claude_api_key or os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        console.print("[red]Recall requires an API key.[/red]")
+        console.print("Set ANTHROPIC_API_KEY or CAPTAINS_LOG_CLAUDE_API_KEY.")
+        raise typer.Exit(1)
+
+    async def do_recall():
+        from captains_log.storage.database import Database
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            # Gather context data for Claude
+            context = await _build_recall_context(db, query)
+
+            # Call Claude to answer the question
+            import anthropic
+
+            client = anthropic.Anthropic(api_key=api_key)
+
+            message = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1024,
+                system=(
+                    "You are Captain's Log, a personal activity tracker. "
+                    "Answer questions about the user's digital activity history based on the data provided. "
+                    "Be concise and specific. Use hours and minutes, not raw numbers. "
+                    "If the data doesn't contain enough information, say so. "
+                    "Format your response for a terminal (no markdown headers, keep it compact)."
+                ),
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"Question: {query}\n\nActivity data:\n{context}",
+                    }
+                ],
+            )
+
+            return message.content[0].text
+
+        finally:
+            await db.close()
+
+    console.print(f"[dim]Searching your history...[/dim]\n")
+
+    try:
+        answer = asyncio.run(do_recall())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    console.print(Panel(answer, title="Captain's Log", border_style="cyan"))
+
+
+async def _build_recall_context(db: Any, query: str) -> str:
+    """Build context data for the recall query.
+
+    Fetches relevant activity data based on time references in the query.
+    """
+    from typing import Any
+
+    now = datetime.now()
+    query_lower = query.lower()
+
+    # Determine date range from the query
+    if "today" in query_lower:
+        start = now.replace(hour=0, minute=0, second=0)
+        end = now
+    elif "yesterday" in query_lower:
+        start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0)
+        end = (now - timedelta(days=1)).replace(hour=23, minute=59, second=59)
+    elif "last week" in query_lower:
+        days_since_monday = now.weekday()
+        start = (now - timedelta(days=days_since_monday + 7)).replace(hour=0, minute=0, second=0)
+        end = (now - timedelta(days=days_since_monday)).replace(hour=23, minute=59, second=59)
+    elif "this week" in query_lower:
+        days_since_monday = now.weekday()
+        start = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0)
+        end = now
+    elif "this month" in query_lower:
+        start = now.replace(day=1, hour=0, minute=0, second=0)
+        end = now
+    elif any(day in query_lower for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]):
+        # Find the most recent occurrence of the named day
+        day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        for i, day_name in enumerate(day_names):
+            if day_name in query_lower:
+                target_weekday = i
+                break
+        days_back = (now.weekday() - target_weekday) % 7
+        if days_back == 0 and "last" in query_lower:
+            days_back = 7
+        elif days_back == 0:
+            days_back = 0  # today
+        target = now - timedelta(days=days_back)
+        start = target.replace(hour=0, minute=0, second=0)
+        end = target.replace(hour=23, minute=59, second=59)
+    else:
+        # Default: last 7 days
+        start = (now - timedelta(days=7)).replace(hour=0, minute=0, second=0)
+        end = now
+
+    # Fetch activity data
+    rows = await db.fetch_all(
+        """
+        SELECT app_name, timestamp, window_title, idle_status
+        FROM activity_logs
+        WHERE timestamp BETWEEN ? AND ?
+        ORDER BY timestamp ASC
+        """,
+        (start.isoformat(), end.isoformat()),
+    )
+
+    if not rows:
+        return f"No activity data found for the period {start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}."
+
+    # Build per-day app usage summary (compact for Claude)
+    days: dict[str, dict[str, float]] = {}
+    for i in range(len(rows)):
+        row = rows[i]
+        day = row["timestamp"][:10]
+        app = row["app_name"]
+
+        if day not in days:
+            days[day] = {}
+
+        if i < len(rows) - 1:
+            t1 = datetime.fromisoformat(row["timestamp"])
+            t2 = datetime.fromisoformat(rows[i + 1]["timestamp"])
+            dur = min((t2 - t1).total_seconds() / 60.0, 30.0)
+            days[day][app] = days[day].get(app, 0) + dur
+
+    # Format as compact text
+    context_parts = [f"Period: {start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}"]
+    for day, apps in sorted(days.items()):
+        total = sum(apps.values())
+        h, m = int(total // 60), int(total % 60)
+        context_parts.append(f"\n{day} ({h}h {m}m total):")
+        sorted_apps = sorted(apps.items(), key=lambda x: x[1], reverse=True)
+        for app_name, mins in sorted_apps[:10]:
+            context_parts.append(f"  {app_name}: {int(mins)}m")
+
+    # Also fetch AI summaries for richer context
+    summaries = await db.fetch_all(
+        """
+        SELECT period_start, context, activity_type
+        FROM summaries
+        WHERE period_start BETWEEN ? AND ?
+        ORDER BY period_start ASC
+        """,
+        (start.isoformat(), end.isoformat()),
+    )
+
+    if summaries:
+        context_parts.append("\nAI Summaries:")
+        for s in summaries[:20]:  # Limit to avoid token overflow
+            if s["context"]:
+                time_str = s["period_start"][11:16] if len(s["period_start"]) > 11 else ""
+                day_str = s["period_start"][:10]
+                context_parts.append(f"  {day_str} {time_str}: {s['context'][:100]}")
+
+    # Focus sessions
+    focus_rows = await db.fetch_all(
+        """
+        SELECT fs.date, fg.name, fs.total_focus_minutes, fs.pomodoro_count
+        FROM focus_sessions fs
+        JOIN focus_goals fg ON fs.goal_id = fg.id
+        WHERE fs.date BETWEEN ? AND ?
+        ORDER BY fs.date
+        """,
+        (start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")),
+    )
+
+    if focus_rows:
+        context_parts.append("\nFocus Sessions:")
+        for fr in focus_rows:
+            context_parts.append(
+                f"  {fr['date']}: {fr['name']} — {int(fr['total_focus_minutes'])}m, "
+                f"{fr['pomodoro_count']} pomodoros"
+            )
+
+    return "\n".join(context_parts)
+
+
 @app.callback()
 def main_callback() -> None:
     """Captain's Log - Personal activity tracking with AI-powered insights."""

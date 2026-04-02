@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from captains_log.ai.batch_processor import BatchProcessor
 from captains_log.core.config import Config, get_config
+from captains_log.notifications.scheduler import NotificationScheduler
 from captains_log.optimization.optimization_engine import OptimizationEngine
 from captains_log.sync.cloud_sync import CloudSync
 from captains_log.core.permissions import PermissionManager
@@ -67,6 +68,9 @@ class Orchestrator:
 
         # Cloud sync
         self.cloud_sync: CloudSync | None = None
+
+        # Notification scheduler
+        self.notification_scheduler: NotificationScheduler | None = None
 
         # Current input stats (accumulated between app switches)
         self._current_input_stats: InputStats | None = None
@@ -297,6 +301,27 @@ class Orchestrator:
                     logger.warning(f"Failed to initialize optimization engine: {e}")
                     self.optimization_engine = None
 
+            # Initialize notification scheduler
+            if self.config.digest.enabled:
+                try:
+                    self.notification_scheduler = NotificationScheduler(
+                        db=self.db,
+                        evening_time=self.config.digest.evening_time,
+                        morning_time=self.config.digest.morning_time,
+                        morning_enabled=self.config.digest.morning_enabled,
+                    )
+                    await self.notification_scheduler.start()
+
+                    # Start periodic notification check task
+                    notify_task = asyncio.create_task(self._periodic_notification_check())
+                    self._tasks.append(notify_task)
+                    logger.info(
+                        f"Daily digest notifications enabled (evening: {self.config.digest.evening_time})"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to initialize notification scheduler: {e}")
+                    self.notification_scheduler = None
+
             logger.info("Captain's Log daemon started successfully")
 
         except Exception as e:
@@ -312,6 +337,11 @@ class Orchestrator:
         logger.info("Stopping Captain's Log daemon...")
 
         self._running = False
+
+        # Stop notification scheduler
+        if self.notification_scheduler:
+            await self.notification_scheduler.stop()
+            self.notification_scheduler = None
 
         # Stop optimization engine
         if self.optimization_engine:
@@ -373,6 +403,24 @@ class Orchestrator:
         self._remove_pid_file()
 
         logger.info("Captain's Log daemon stopped")
+
+    async def _periodic_notification_check(self) -> None:
+        """Periodically check if notifications should be sent."""
+        check_interval = 60  # Check every 60 seconds
+
+        while self._running:
+            try:
+                await asyncio.sleep(check_interval)
+
+                if not self._running or not self.notification_scheduler:
+                    break
+
+                await self.notification_scheduler.check_and_send()
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in notification check: {e}")
 
     def _on_app_change(self, app_info: AppInfo) -> None:
         """Handle application change events.

@@ -161,6 +161,16 @@ class OptimizationConfig(BaseModel):
     )
 
 
+class DigestConfig(BaseModel):
+    """Daily/weekly digest notification configuration."""
+
+    enabled: bool = Field(default=True, description="Enable digest notifications")
+    evening_time: str = Field(default="18:00", description="Evening digest time (HH:MM)")
+    morning_enabled: bool = Field(default=False, description="Enable morning briefing")
+    morning_time: str = Field(default="09:00", description="Morning briefing time (HH:MM)")
+    health_alerts: bool = Field(default=True, description="Alert if daemon stops tracking")
+
+
 class Config(BaseSettings):
     """Main application configuration."""
 
@@ -192,6 +202,7 @@ class Config(BaseSettings):
     sync: SyncConfig = Field(default_factory=SyncConfig)
     focus: FocusConfig = Field(default_factory=FocusConfig)
     optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
+    digest: DigestConfig = Field(default_factory=DigestConfig)
 
     @property
     def db_path(self) -> Path:

@@ -1,840 +1,277 @@
 # Captain's Log: Product Roadmap
 
-## 80-20 Analysis: What Features Drive 80% of Value
+## Vision
 
-### Daily Usage (HIGH FREQUENCY - the 20%)
-| Feature | Usage | Why It Matters |
-|---------|-------|----------------|
-| **Start Focus Session** | 5-10x/day | The core action - without this, nothing else matters |
-| **Glance at Timer** | 50x/day | Ambient awareness keeps you accountable |
-| **Daily Time Total** | 10x/day | "How's my day going?" answered in 1 second |
-| **Goal Streaks** | 5x/day | Visual motivation - don't break the chain |
+**"Your work, automatically journaled. Your time, honestly understood."**
 
-### Weekly Usage (MEDIUM FREQUENCY)
-| Feature | Usage | Why It Matters |
-|---------|-------|----------------|
-| Daily Summary | 1x/day | Reflection and closure |
-| Weekly Report | 1x/week | Trends and patterns |
-| App Usage Breakdown | 1x/week | Understanding time allocation |
+Captain's Log is a personal activity tracking system that passively captures your digital work life and surfaces insights at the right moment — not buried in dashboards you'll never check, but pushed to you as a daily rhythm.
 
-### Rarely Used (LOW VALUE for daily experience)
-| Feature | Usage | Reality |
-|---------|-------|---------|
-| Screenshot Browser | Monthly | Nice for recall, but not daily |
-| Detailed Analytics | Monthly | Information overload |
-| Optimization Metrics | Weekly | Too abstract for most users |
-| Settings | Rarely | Set once, forget |
+The name says it all: a *log*. A quiet, honest record of where your time goes. Combined with goal tracking to help you spend it where you intend.
 
 ---
 
-## The Core Loop (What Makes Users Return)
+## The Honest Assessment (April 2026)
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    DAILY RHYTHM                      │
-├─────────────────────────────────────────────────────┤
-│                                                      │
-│   MORNING (9am)                                      │
-│   ┌─────────────────────────────────────┐           │
-│   │ "Yesterday: 4.5h deep work          │           │
-│   │  Top: Captain's Log (2h), Writing   │           │
-│   │  Today's goals ready to start"      │           │
-│   └─────────────────────────────────────┘           │
-│              ↓                                       │
-│   WORK DAY                                          │
-│   ┌─────────────────────────────────────┐           │
-│   │ Click goal → Timer starts           │           │
-│   │ Floating widget shows countdown     │           │
-│   │ Session completes → Streak updates  │           │
-│   └─────────────────────────────────────┘           │
-│              ↓                                       │
-│   EVENING (6pm)                                     │
-│   ┌─────────────────────────────────────┐           │
-│   │ "Today: 5.2h focused                │           │
-│   │  3 goals progressed                 │           │
-│   │  Great day!"                        │           │
-│   └─────────────────────────────────────┘           │
-│                                                      │
-└─────────────────────────────────────────────────────┘
-```
+### What the Data Shows
+
+| Period | Activity Events | Active Days | Reality |
+|--------|----------------|-------------|---------|
+| Jan 15–29 | 2,622 | 15 | Built the product, used it while building |
+| Jan 30–Mar 31 | 0 | 0 | Complete abandonment — daemon wasn't running |
+| Apr 1–now | 35 | 1 | Restarted, coming back |
+
+**Focus sessions**: 11 total, last one Jan 26.
+**Key insight**: The daemon ran for 2 weeks, stopped, and nobody noticed for 2 months.
+
+### Root Causes
+
+1. **No daily pull**: Nothing brings you back. No notification, no morning ping, no habit trigger.
+2. **Value buried in dashboards**: Rich data exists but you have to seek it out — and you don't.
+3. **Daemon reliability**: It stopped and there was no alert. Silent failure = invisible tool.
+
+### What Works Well
+
+- Passive activity tracking (app switches, window titles, idle detection, screenshots)
+- AI summarization with Claude
+- Goal tracking and focus session infrastructure
+- SQLite local-first architecture
+- Menu bar app and floating widget
+- Optimization engine analysis (DEAL, interrupts, context switches)
 
 ---
 
-## Three Perspectives
+## Core Design Principles
 
-### AI Developer: Technical Excellence
+### 1. Passive Capture, Active Reflection
+The tracking is invisible. The insights are pushed. You never "use" the tracker — you *receive* its output.
 
-**Current State:**
-- Passive tracking works well
-- AI summarization exists but isn't surfaced proactively
-- Data is rich but insights are buried
+### 2. The Right Data at the Right Time
+- **Morning**: What did yesterday look like? What's the plan?
+- **During work**: Ambient awareness (menu bar total, widget timer)
+- **Evening**: Here's what you actually did today
+- **Weekly**: Patterns, trends, honest assessment
 
-**Opportunity:**
-The AI should be **proactive, not reactive**:
+### 3. Honest Mirror, Not Gamification
+Streaks and scores can motivate, but the primary value is *truth*. "You spent 3 hours in Slack today" is more useful than a focus score of 7/10.
 
-| Trigger | AI Action |
-|---------|-----------|
-| 9:00 AM | Push morning briefing: "Yesterday you focused 4h. Goals for today?" |
-| After 2h meetings | Nudge: "Heavy meeting morning. Block 2h for deep work?" |
-| 5:00 PM | Evening summary: "You accomplished X, Y, Z" |
-| Off-goal 10min | Gentle: "You started 'Writing' but you're in Slack..." |
-| Week end | Weekly insight: "Your most productive day was Tuesday" |
-
-**Technical Implementation:**
-- macOS notifications via UserNotifications framework
-- Smart scheduling based on calendar integration
-- Context-aware nudging (don't interrupt deep work)
+### 4. Goals Give Direction
+Passive tracking answers "where did my time go?" Goal tracking answers "did my time go where I wanted?" Both matter.
 
 ---
 
-### Product Designer: User Experience
+## The Daily Rhythm (Core Loop)
 
-**Design Principles:**
-1. **Zero friction** - One click to start, zero clicks to track
-2. **Ambient, not demanding** - Glanceable information, never interrupting
-3. **Emotional design** - Celebrate wins, gentle accountability
-4. **Progressive disclosure** - Simple surface, depth when needed
+```
+  6:00 PM YESTERDAY                    9:00 AM TODAY
+  ┌─────────────────┐                  ┌─────────────────┐
+  │ Evening Digest   │                  │ Morning Briefing │
+  │                  │                  │                  │
+  │ Today: 6h 23m    │                  │ Yesterday: 6h    │
+  │ Chrome    2h 40m │                  │ Deep work: 3.2h  │
+  │ VS Code   2h 10m │                  │                  │
+  │ Slack     1h 33m │                  │ Today's calendar:│
+  │                  │                  │ 2 meetings, 4h   │
+  │ Most focused:    │                  │ free for focus   │
+  │ 10am-12pm        │                  │                  │
+  │                  │                  │ Suggestion:      │
+  │ AI: "Productive  │                  │ Start Deep Work  │
+  │ coding day,      │                  │ at 9:30am        │
+  │ shipped feature" │                  └─────────────────┘
+  └─────────────────┘
+              │
+              ▼ DURING WORK
+  ┌─────────────────────────────────┐
+  │ Menu Bar: ● 3h 12m              │  ← Glanceable
+  │ Widget: Deep Work  18:42  ●●○○  │  ← When focusing
+  │ Goal tracking running silently  │  ← Passive
+  └─────────────────────────────────┘
+              │
+              ▼ FRIDAY 5 PM
+  ┌─────────────────────────────────┐
+  │ Weekly Digest                   │
+  │ This week: 28h active           │
+  │ vs last week: 32h               │
+  │ Most productive: Tuesday        │
+  │ Top: Chrome (12h), Code (8h)    │
+  │ Deep work hours: 14h            │
+  │ Slack grew 20% vs last week     │
+  └─────────────────────────────────┘
+```
 
-**The Perfect Menu Bar:**
-```
-┌─────────────────────────────────────┐
-│ Today                        2.5h   │  ← Glanceable daily total
-├─────────────────────────────────────┤
-│ ▶ Deep Work          🟢🟢🟡⚪⚪   │  ← Goals with streaks
-│ ▸ Learn Swift UI     🟡🔴🟢🔴⚪   │
-│ ▶ Writing            🔴🔴🔴🔴⚪   │
-├─────────────────────────────────────┤
-│ Yesterday: 4.2h focused             │  ← Proactive insight
-│    "Great progress on Captain's Log" │
-├─────────────────────────────────────┤
-│ + Quick Focus    Dashboard          │
-└─────────────────────────────────────┘
-```
-
-**When Timer is Running:**
-```
-┌─────────────────────────────────────┐
-│ Deep Work                   18:42   │  ← Current session
-│ Session 2 of 4  ●●○○               │
-├─────────────────────────────────────┤
-│ [▶]  [⏹]  [Widget]                 │  ← Minimal controls
-├─────────────────────────────────────┤
-│ Today                        3.2h   │
-└─────────────────────────────────────┘
-```
+**This loop is what was missing.** The evening digest is the single most important feature to build.
 
 ---
 
-### Growth Marketer: Adoption & Retention
+## Feature Inventory: What Exists
 
-**The Hook:** "Know exactly where your time goes"
+### Tier 1: Working & Core
+| Feature | Status | Value |
+|---------|--------|-------|
+| Passive activity tracking | Working | Foundation — captures all app usage |
+| AI 5-minute summaries | Working | Rich context from Claude |
+| Screenshot capture | Working | Visual record every 5 min + app change |
+| SQLite database (local-first) | Working | Fast, private, reliable |
+| CLI (start/stop/status/health) | Working | Daemon management |
+| FastAPI web dashboard | Working | Timeline, analytics, insights |
+| Focus goals & sessions | Working | Goal-based focus tracking |
+| Pomodoro timer | Working | Session-based work intervals |
+| Menu bar app (Swift) | Working | Glanceable daily total + goals |
+| Floating focus widget (Swift) | Working | Ambient timer during sessions |
 
-**The Habit Loop:**
-```
-CUE        → Menu bar icon shows your daily time
-ROUTINE    → Start focus session with one click
-REWARD     → See streak update, hear completion sound
-INVESTMENT → Goals with progress over days/weeks
-```
+### Tier 2: Built but Underused
+| Feature | Status | Issue |
+|---------|--------|-------|
+| Optimization engine (DEAL, interrupts, context switches) | Built | Only accessible via CLI — not surfaced |
+| Daily briefing generator | Built | Never wired to notifications |
+| Weekly report generator | Built | Only via CLI command |
+| Next.js frontend | Built | Duplicate of FastAPI dashboard |
+| Cloud sync | Built | Railway backend dead (404) |
 
-**Retention Mechanics:**
-| Mechanic | Implementation |
-|----------|----------------|
-| **Streaks** | Visual 🟢🟡🔴 circles - don't break the chain |
-| **Daily Total** | Gamification without points - "4.5h today!" |
-| **Weekly Email** | "Your week: 22h focused, 15% more than last week" |
-| **Milestones** | "100 hours of deep work!" notifications |
-
-**Share Moments:**
-- Weekly summary image for Twitter/LinkedIn
-- "I focused 20h this week" shareable card
-- Streak screenshots (like Duolingo)
-
-**Viral Loop:**
-```
-User focuses → Sees progress → Shares achievement
-                                    ↓
-                           Friend sees post
-                                    ↓
-                           Downloads Captain's Log
-                                    ↓
-                           Becomes new user
-```
+### Tier 3: Missing (Causes Abandonment)
+| Feature | Impact |
+|---------|--------|
+| **Daily digest notification** | No daily pull = no habit |
+| **Daemon health alert** | Silent failure = invisible tool |
+| **`captains-log today`** (quick summary) | Can't quickly check the day |
+| **`captains-log recall`** (query history) | Can't ask questions about past |
+| **launchd auto-start verified** | Daemon should survive reboots |
 
 ---
 
-## Roadmap: Prioritized by Impact
+## Roadmap: Prioritized by "What Makes You Come Back"
 
-### Phase 1: Core Loop Excellence ✅ DONE
-- [x] Menu bar app with goals
-- [x] Floating timer widget
-- [x] Daily time tracking
-- [x] Goal streaks visualization
-- [x] One-click focus start
+### Phase 0: Foundation (NOW)
+**Goal: The daemon runs reliably and you know when it doesn't.**
 
-### Phase 2: Proactive AI
-**Goal: AI surfaces insights at the right moment**
+- [ ] Verify launchd auto-start is installed and working
+- [ ] Add daemon health notification (if no activity logged in 1 hour → macOS alert)
+- [ ] Fix cloud sync (either fix Railway or remove dead code)
+- [ ] `captains-log today` — quick terminal summary of current day
 
-| Feature | Priority | Effort |
-|---------|----------|--------|
-| Morning briefing notification | P0 | 2 days |
-| Evening summary notification | P0 | 1 day |
-| "Yesterday" card in menu bar | P0 | 1 day |
-| Off-goal gentle nudge | P1 | 2 days |
-| Smart notification timing | P2 | 3 days |
+### Phase 1: The Daily Pull
+**Goal: A notification at 6pm that makes you glance at your day. This is the #1 priority.**
 
-**Files to modify:**
-- `src/captains_log/notifications/` (NEW)
-- `MenuBarApp/CaptainsLogMenuBar.swift` - Add yesterday card
+- [ ] macOS notification at configurable time (default 6pm)
+- [ ] Content: hours active, top 3 apps, AI-generated 1-sentence narrative
+- [ ] Clicking notification opens dashboard to today's timeline
+- [ ] `captains-log digest` — generate/view the daily digest on demand
+- [ ] Morning briefing notification (optional, default 9am)
+- [ ] Briefing: yesterday's summary + today's calendar context + suggestion
 
-### Phase 3: Emotional Design
-**Goal: Make progress feel rewarding**
+### Phase 2: Understanding Where Time Goes
+**Goal: Make time-spent analysis effortless and honest.**
 
-| Feature | Priority | Effort |
-|---------|----------|--------|
-| Session completion sound | P0 | 1 hour |
-| Session completion animation | P1 | 1 day |
-| Milestone notifications (10h, 50h, 100h) | P1 | 1 day |
-| Weekly achievement badge | P2 | 2 days |
+- [ ] `captains-log recall "last Thursday"` — natural language history query
+- [ ] `captains-log week` — this week vs last week comparison
+- [ ] Surface optimization engine insights in the daily/weekly digest
+  - Context switches count
+  - Interrupt patterns (Slack/email frequency)
+  - Deep work vs shallow work ratio
+- [ ] Improve dashboard with "time spent" as the primary view
+  - App usage pie chart front and center
+  - Deep work hours trend line
+  - "Where did today go?" narrative
 
-### Phase 4: Weekly Insights
-**Goal: Reflection drives improvement**
+### Phase 3: Proactive AI
+**Goal: AI surfaces insights at the right moment, not when you ask.**
 
-| Feature | Priority | Effort |
-|---------|----------|--------|
-| Weekly summary generation | P0 | 2 days |
-| Shareable weekly card image | P1 | 2 days |
-| Week-over-week comparison | P1 | 1 day |
-| Top productive day/time insights | P2 | 1 day |
+| Trigger | Action |
+|---------|--------|
+| 9:00 AM | Morning briefing notification |
+| 6:00 PM | Evening digest notification |
+| Friday 5 PM | Weekly summary notification |
+| Off-goal >10min during focus | Gentle nudge (amber border on widget) |
+| Unusual pattern detected | "You spent 2x more time in Slack than usual today" |
 
-### Phase 5: Calendar Integration (NEXT)
-**Goal: Smart scheduling around meetings**
+### Phase 4: Calendar Integration
+**Goal: Smart scheduling around meetings.**
 
-#### Why This Matters
-- Users don't know when to focus without seeing their calendar
-- "2 hours until next meeting" is actionable intelligence
-- Meeting fragmentation is the #1 productivity killer
+- [ ] macOS EventKit integration (read calendar events)
+- [ ] "Next meeting in Xh" in menu bar
+- [ ] "You have 2h free — start focus?" smart suggestion
+- [ ] Meeting fragmentation warnings
+- [ ] Google Calendar as optional second source
 
-#### Features
+### Phase 5: Emotional Design
+**Goal: Make progress feel rewarding.**
 
-| Feature | Priority | Value |
-|---------|----------|-------|
-| Read macOS Calendar events | P0 | Foundation for everything |
-| "Next meeting in Xh" in menu bar | P0 | Instant awareness |
-| "You have 2h free - start focus?" | P0 | Smart nudging |
-| Show meeting blocks in timeline | P1 | Visual context |
-| "Meeting-heavy day" warning | P1 | Daily planning |
-| Auto-detect meeting from Zoom/Meet | P2 | No manual tracking |
+- [ ] Session completion sound + subtle animation
+- [ ] Milestone notifications (10h, 50h, 100h deep work)
+- [ ] Weekly achievement summary
+- [ ] Goal streak visualization in menu bar
+
+### Phase 6: Weekly Insights & Sharing
+**Goal: Reflection drives improvement, sharing drives accountability.**
+
+- [ ] Weekly summary generation (already built — needs scheduling)
+- [ ] Shareable weekly card image
+- [ ] Week-over-week comparison
+- [ ] Export: "What I accomplished this week" for standups/updates
 
 ---
 
-## Scalable Calendar Architecture
-
-### Design Principles
-1. **Protocol-based** - Abstract calendar sources behind unified interface
-2. **EventKit first** - Ship fast with native macOS
-3. **Google Calendar next** - Add OAuth flow in iteration 2
-4. **Local-first, cloud-optional** - Privacy by default, sync when needed
-
-### Phased Implementation
-
-#### Phase 5a: EventKit Foundation (Week 1)
-- CalendarProvider protocol (Swift)
-- EventKitProvider implementation
-- Menu bar integration
-- Local caching in SQLite
-
-#### Phase 5b: Google Calendar (Week 2-3)
-- GoogleCalendarProvider implementation
-- OAuth 2.0 flow in menu bar app (opens browser, handles redirect)
-- Token storage in Keychain
-- Provider selection UI in settings
-
-#### Phase 5c: Cloud Sync - Optional (Week 4+)
-- Calendar events sync to cloud (encrypted)
-- Cross-device availability
-- User opt-in only
-
-### Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Menu Bar App                            │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │              CalendarManager                         │    │
-│  │  - Aggregates events from all providers              │    │
-│  │  - Deduplicates (same event from multiple sources)   │    │
-│  │  - Provides unified API to UI                        │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                          │                                   │
-│            ┌─────────────┴─────────────┐                    │
-│            ▼                           ▼                    │
-│  ┌─────────────────┐         ┌─────────────────┐           │
-│  │ EventKitProvider │         │ GoogleProvider  │           │
-│  │ (Phase 5a)       │         │ (Phase 5b)      │           │
-│  └─────────────────┘         └─────────────────┘           │
-│            │                           │                    │
-│            ▼                           ▼                    │
-│     macOS Calendar              Google Calendar API         │
-│     (via EventKit)              (via OAuth 2.0)             │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-              ┌─────────────────────┐
-              │   Local SQLite DB   │
-              │   (cached events)   │
-              └─────────────────────┘
-                          │
-                          ▼ (Optional - Phase 5c)
-              ┌─────────────────────┐
-              │   Cloud Sync        │
-              │   (encrypted)       │
-              └─────────────────────┘
-```
-
-### CalendarProvider Protocol (Swift)
-
-```swift
-protocol CalendarProvider {
-    var id: String { get }
-    var name: String { get }
-    var isConnected: Bool { get }
-    var requiresAuth: Bool { get }
-
-    func requestAccess() async -> Bool
-    func fetchEvents(from: Date, to: Date) async throws -> [CalendarEvent]
-    func disconnect()
-}
-
-// Unified event model (provider-agnostic)
-struct CalendarEvent: Identifiable, Hashable {
-    let id: String
-    let providerId: String  // "eventkit" or "google"
-    let externalId: String  // Original ID from provider
-    let title: String
-    let startDate: Date
-    let endDate: Date
-    let isAllDay: Bool
-    let location: String?
-    let meetingUrl: String?  // Zoom/Meet link if detected
-    let calendarName: String
-    let calendarColor: Color?
-
-    // For deduplication
-    func matches(_ other: CalendarEvent) -> Bool {
-        // Same event synced from multiple sources
-        return title == other.title &&
-               abs(startDate.timeIntervalSince(other.startDate)) < 60 &&
-               abs(endDate.timeIntervalSince(other.endDate)) < 60
-    }
-}
-```
-
-### CalendarManager (Aggregator)
-
-```swift
-class CalendarManager: ObservableObject {
-    @Published var providers: [CalendarProvider] = []
-    @Published var events: [CalendarEvent] = []
-    @Published var nextEvent: CalendarEvent?
-    @Published var freeMinutes: Int = 0
-
-    private let cache: CalendarCache  // SQLite
-
-    init() {
-        // Always try EventKit first
-        let eventKit = EventKitProvider()
-        providers.append(eventKit)
-
-        // Check if Google is configured
-        if let google = GoogleCalendarProvider.loadFromKeychain() {
-            providers.append(google)
-        }
-    }
-
-    func fetchAllEvents() async {
-        var allEvents: [CalendarEvent] = []
-
-        for provider in providers where provider.isConnected {
-            let events = try? await provider.fetchEvents(
-                from: Date(),
-                to: Calendar.current.date(byAdding: .day, value: 1, to: Date())!
-            )
-            allEvents.append(contentsOf: events ?? [])
-        }
-
-        // Deduplicate and sort
-        events = deduplicateEvents(allEvents)
-            .filter { !$0.isAllDay }
-            .sorted { $0.startDate < $1.startDate }
-
-        // Cache locally
-        cache.store(events)
-
-        updateNextEvent()
-    }
-
-    private func deduplicateEvents(_ events: [CalendarEvent]) -> [CalendarEvent] {
-        var unique: [CalendarEvent] = []
-        for event in events {
-            if !unique.contains(where: { $0.matches(event) }) {
-                unique.append(event)
-            }
-        }
-        return unique
-    }
-}
-```
-
-### Google OAuth Flow (Phase 5b)
-
-```swift
-class GoogleCalendarProvider: CalendarProvider {
-    let id = "google"
-    let name = "Google Calendar"
-    let requiresAuth = true
-
-    private var accessToken: String?
-    private var refreshToken: String?
-
-    var isConnected: Bool { accessToken != nil }
-
-    // OAuth configuration
-    private let clientId = "YOUR_CLIENT_ID.apps.googleusercontent.com"
-    private let redirectUri = "captainslog://oauth/google"
-    private let scopes = ["https://www.googleapis.com/auth/calendar.readonly"]
-
-    func requestAccess() async -> Bool {
-        // 1. Build OAuth URL
-        let authUrl = buildAuthUrl()
-
-        // 2. Open in default browser
-        NSWorkspace.shared.open(authUrl)
-
-        // 3. Wait for redirect (handled by URL scheme)
-        // App delegate handles: captainslog://oauth/google?code=XXX
-
-        // 4. Exchange code for tokens
-        // 5. Store in Keychain
-
-        return true
-    }
-
-    func fetchEvents(from: Date, to: Date) async throws -> [CalendarEvent] {
-        guard let token = accessToken else { throw AuthError.notAuthenticated }
-
-        // Call Google Calendar API
-        let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/primary/events")!
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-        let (data, _) = try await URLSession.shared.data(for: request)
-        let response = try JSONDecoder().decode(GoogleEventsResponse.self, from: data)
-
-        return response.items.map { $0.toCalendarEvent(providerId: id) }
-    }
-}
-```
-
-### URL Scheme Registration (Info.plist)
-
-```xml
-<key>CFBundleURLTypes</key>
-<array>
-    <dict>
-        <key>CFBundleURLName</key>
-        <string>OAuth Callback</string>
-        <key>CFBundleURLSchemes</key>
-        <array>
-            <string>captainslog</string>
-        </array>
-    </dict>
-</array>
-```
-
-### Settings UI for Calendar Sources
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Calendar Sources                                             │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ✅ macOS Calendar (EventKit)                    Connected   │
-│     Calendars: Work, Personal, Holidays                      │
-│                                                              │
-│  ⬜ Google Calendar                         [Connect]        │
-│     Sign in to see Google Calendar events                    │
-│                                                              │
-│  ⬜ Microsoft Outlook                       Coming Soon      │
-│                                                              │
-├─────────────────────────────────────────────────────────────┤
-│  ☁️ Cloud Sync                              [ ] Enabled     │
-│     Sync calendar cache across devices                       │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Implementation: macOS EventKit (Phase 5a)
-
-**Why EventKit first:**
-- No OAuth complexity
-- Ships in 1 week
-- Works for users with synced calendars
-- Validates the UX before adding complexity
-
-#### Menu Bar States
-
-**State A: No Active Session, Calendar Connected**
-```
-┌─────────────────────────────────────┐
-│ Captain's Log                    🟢 │
-├─────────────────────────────────────┤
-│ Today                         1.2h  │
-│ Team Standup in 45m                 │
-├─────────────────────────────────────┤
-│ GOALS                               │
-│ ▶ Deep Work            🟢🟢🟡⚪⚪  │
-│ ▸ Learn Swift UI       🟡🔴🟢🔴⚪  │
-│ ▶ Writing              🔴🔴🔴🔴⚪  │
-├─────────────────────────────────────┤
-│ 45m free — Start "Deep Work"?       │  ← Contextual suggestion
-├─────────────────────────────────────┤
-│ + Quick Focus      Dashboard        │
-│ Quit                                │
-└─────────────────────────────────────┘
-```
-
-**State B: Active Session with Upcoming Meeting**
-```
-┌─────────────────────────────────────┐
-│ Deep Work                    18:42  │
-│ ●●○○  Session 2 of 4                │
-│ [Widget] [Pause] [Stop]             │
-├─────────────────────────────────────┤
-│ Today                         2.1h  │
-│ Warning: Meeting in 12m             │  ← Warning when <15m
-├─────────────────────────────────────┤
-│ GOALS                               │
-│ ...                                 │
-└─────────────────────────────────────┘
-```
-
-#### Calendar Row Design Rules
-| Condition | Display |
-|-----------|---------|
-| Next meeting >60m away | `{Title} in {X}h {Y}m` |
-| Next meeting 15-60m away | `{Title} in {X}m` |
-| Next meeting <15m away | `Warning: Meeting in {X}m` (orange) |
-| Currently in meeting | `In: {Title} (ends in {X}m)` |
-| No more meetings today | `No more meetings today` |
-| Meeting-heavy (>4h) | Show warning badge |
-
-#### Suggestion Row Logic
-| Free Time | Suggestion |
-|-----------|------------|
-| ≥90m | `{X}m free — Start "{Best Goal}"?` (suggest 50m) |
-| 60-89m | `{X}m free — Start "{Best Goal}"?` (suggest 50m) |
-| 30-59m | `{X}m free — Quick 25m focus?` |
-| 15-29m | `{X}m free — Quick 15m focus?` |
-| <15m | No suggestion shown |
-
-#### Files to Create/Modify
-
-| File | Action | Purpose |
-|------|--------|---------|
-| `MenuBarApp/CalendarManager.swift` | CREATE | EventKit integration |
-| `MenuBarApp/CaptainsLogMenuBar.swift` | MODIFY | Add calendar display, suggestions |
-| `MenuBarApp/Info.plist` | MODIFY | Add calendar permission description |
-
-### Phase 6: Social & Growth
-**Goal: Word of mouth growth**
-
-| Feature | Priority | Effort |
-|---------|----------|--------|
-| Shareable weekly summary image | P0 | 2 days |
-| Copy-to-clipboard stats | P0 | 1 day |
-| Twitter/LinkedIn share button | P1 | 1 day |
-| Referral tracking | P2 | 2 days |
-
----
-
-## Metrics to Track
-
-### Activation
-- % of installs that start first focus session
-- Time to first focus session
-
-### Engagement
-- Daily active users (DAU)
-- Focus sessions per user per day
-- Average session length
-
-### Retention
-- D1, D7, D30 retention
-- Streak length distribution
-- Users with 7+ day streaks
-
-### Growth
-- Weekly summary shares
-- Referral installs
-- Organic mentions
-
----
-
-## What NOT to Build
+## What NOT to Build (Learned from Experience)
 
 | Feature | Why Skip |
 |---------|----------|
-| Team features | Adds complexity, different product |
+| Team features | Different product, different market |
 | Mobile app | Desktop focus is the niche |
-| Detailed analytics dashboard | Users don't look at it |
-| Integrations with 10+ tools | Start with 1-2 that matter |
-| AI chat interface | Overkill for the use case |
+| Complex dashboards with 10 charts | Nobody looks at dashboards unprompted |
+| Integrations with 10+ tools | Start with macOS native, add one at a time |
+| AI chat interface | Natural language recall is enough |
+| Viral loops / growth hacks | Build for yourself first |
+| Second frontend framework | One dashboard (FastAPI) is enough |
 
 ---
 
-## Summary: The 80-20 Focus
+## Technical Decisions
 
-**Build these (20% of effort, 80% of value):**
-1. ✅ One-click focus start
-2. ✅ Glanceable daily time
-3. ✅ Visual goal streaks
-4. ⬜ Morning/evening notifications
-5. ⬜ Session completion celebration
-6. ⬜ Shareable weekly summary
+### Keep
+- **Python + PyObjC** for daemon (macOS native APIs)
+- **SQLite + WAL** for storage (fast, local, reliable)
+- **Claude AI** for summarization (quality justifies cost)
+- **Swift** for menu bar + widget (native macOS feel)
+- **FastAPI + Jinja2** for dashboard (server-rendered, fast)
 
-**Skip these (80% of effort, 20% of value):**
-- Complex analytics dashboards
-- Multiple integrations
-- Team collaboration
-- Mobile apps
-- AI chat interfaces
+### Simplify
+- **Remove cloud sync** or fix the Railway deployment — dead infrastructure is worse than no infrastructure
+- **Consolidate to one frontend** — FastAPI dashboard is sufficient, Next.js is duplicative
+- **Surface optimization engine insights via digest** — don't require CLI commands to see them
 
----
-
-## Market Research: Competitive Landscape (January 2026)
-
-### Category 1: Automatic Time Tracking
-
-| Tool | Strengths | Weaknesses | Pricing |
-|------|-----------|------------|---------|
-| **RescueTime** | Fully automatic tracking, Focus Sessions, distraction blocking, AI insights | Web-only analytics, no local data, limited Mac app, outdated UI | $78-144/year |
-| **Timing (Mac)** | Mac-native, beautiful UI, local data, 10+ years of development | Mac-only, subscription required, no focus mode | ~$60/year |
-| **ActivityWatch** | Open-source, privacy-first, local storage, cross-platform | No AI insights, no focus features, technical setup | Free |
-| **Rize** | AI-powered insights, burnout detection, break reminders | Subscription required, web-focused | ~$100/year |
-
-**Key Insight**: RescueTime dominates but users complain about web-only experience. Timing is loved by Mac users for its local-first approach. Neither combines automatic tracking with goal-based focus sessions.
-
-### Category 2: Focus/Pomodoro Apps
-
-| Tool | Strengths | Weaknesses | Pricing |
-|------|-----------|------------|---------|
-| **Flow (Mac)** | Beautiful design, Apple ecosystem integration, widgets | No automatic tracking, no activity insights | $5/month |
-| **Forest** | Gamification (grow trees), real tree planting | Mobile-first, no desktop analytics | $4 one-time |
-| **Be Focused** | Apple-native, simple Pomodoro | No automatic tracking, basic features | Free/Premium |
-| **Focus To-Do** | Combines Pomodoro with task management | Complex UI, no activity tracking | Freemium |
-
-**Key Insight**: Focus apps are either (1) simple timers without insights or (2) complex task managers. None automatically track what you're actually doing during focus time.
-
-### Category 3: Calendar-Aware Scheduling
-
-| Tool | Strengths | Weaknesses | Pricing |
-|------|-----------|------------|---------|
-| **Reclaim.ai** | AI scheduling, Focus Time protection, Microsoft/Google integration | Team-focused, complex setup, subscription | $8-15/user/month |
-| **Clockwise** | Focus time blocks, team sync, MCP integration | Enterprise-focused, Google Calendar only | $6-12/user/month |
-| **Motion** | AI task scheduling, automatic rescheduling | Complex, expensive, overkill for individuals | $19/month |
-
-**Key Insight**: Calendar tools focus on *scheduling* focus time, not *tracking* whether you actually focused. They're team-oriented and require significant setup.
-
-### Category 4: Screen Time Monitoring
-
-| Tool | Strengths | Weaknesses | Pricing |
-|------|-----------|------------|---------|
-| **macOS Screen Time** | Built-in, free, app limits | No productivity insights, no goals | Free |
-| **Flipd** | Focus lock mode, group challenges | Mobile-first, no Mac analytics | Freemium |
-| **Freedom** | Cross-platform blocking, scheduled sessions | No tracking/analytics, just blocking | $7/month |
-
-**Key Insight**: These tools block distractions but don't help you understand where your time goes or build focus habits.
+### Add
+- **macOS UserNotifications** for daily/weekly digests
+- **APScheduler integration** in orchestrator for timed digests
+- **Natural language query** via Claude for `recall` command
 
 ---
 
-## Captain's Log Differentiation
+## Success Metrics
 
-### Our Unique Position
+| Metric | Target | How to Measure |
+|--------|--------|---------------|
+| Daemon uptime | >99% (crashes auto-recover) | launchd KeepAlive + health alerts |
+| Daily digest viewed | 5+ days/week | Notification interaction tracking |
+| `today`/`recall` usage | 3+ times/week | CLI command logging |
+| Consecutive days tracked | 30+ days | Activity log continuity |
+| Focus sessions/week | 5+ | focus_sessions table |
 
-**The Gap We Fill**: No existing tool combines:
-1. Automatic passive tracking (like RescueTime)
-2. Goal-based focus sessions (like Flow)
-3. Calendar awareness (like Reclaim)
-4. Local-first privacy (like ActivityWatch)
-5. AI-powered insights (like Rize)
-
-### Competitive Advantages
-
-| Feature | Captain's Log | RescueTime | Flow | Reclaim |
-|---------|--------------|------------|------|---------|
-| Automatic tracking | ✅ | ✅ | ❌ | ❌ |
-| Local-first data | ✅ | ❌ | ✅ | ❌ |
-| Goal-based focus | ✅ | ❌ | ✅ | ❌ |
-| Visual streaks | ✅ | ❌ | ❌ | ❌ |
-| Calendar integration | Planned | ❌ | ❌ | ✅ |
-| AI insights | ✅ | ✅ | ❌ | ❌ |
-| Menu bar presence | ✅ | ❌ | ✅ | ❌ |
-| Floating widget | ✅ | ❌ | ✅ | ❌ |
-| macOS native | ✅ | ❌ | ✅ | ❌ |
-
-### Target User
-
-**Primary Persona**: Solo knowledge worker (developer, writer, designer) who:
-- Works primarily on Mac
-- Values privacy (doesn't want data in the cloud)
-- Wants to understand where time goes without manual tracking
-- Uses Pomodoro/focus techniques for deep work
-- Cares about building consistent habits (streaks)
-
-**NOT our user**:
-- Teams needing shared analytics
-- Freelancers needing billing/invoicing
-- Mobile-first workers
-- Enterprise compliance requirements
+The most important metric: **Is the daemon running, and do you look at the digest?** Everything else follows from that.
 
 ---
 
-## Research-Backed Design Decisions
+## Competitive Position
 
-### From Cal Newport's Deep Work Philosophy
+Captain's Log uniquely combines:
+1. **Automatic passive tracking** (like RescueTime) — no manual time entry
+2. **Goal-based focus sessions** (like Flow) — intentional deep work
+3. **Local-first privacy** (like ActivityWatch) — data stays on your Mac
+4. **AI-powered insights** (unique) — Claude summarizes and answers questions
+5. **Push-based engagement** (the key differentiator) — insights come to you
 
-> "Focus creates happiness... the satisfaction at the end of a focused day is built-in."
-
-**Applied in Captain's Log**:
-- Session completion celebration (emotional reward)
-- Daily focus total (visible progress)
-- Streak visualization (habit formation)
-
-### From Behavioral Psychology (Habit Loop)
-
-**CUE → ROUTINE → REWARD → INVESTMENT**
-
-| Stage | Captain's Log Implementation |
-|-------|------------------------------|
-| Cue | Menu bar icon shows daily time |
-| Routine | One-click focus start |
-| Reward | Streak update, completion sound |
-| Investment | Goals with multi-day progress |
-
-### From Market Data (2025-2026)
-
-- **37%** of professional time spent in meetings (opportunity for calendar integration)
-- **23 hours/week** average executive meeting time (need meeting-heavy warnings)
-- **6 hours/week** lost to context switching (need gentle nudges)
-- **7.6 hours/week** saved by AI scheduling tools (opportunity for smart suggestions)
-- **26 minutes/day** saved by AI productivity tools (validates AI-powered approach)
+No existing tool does all five. Most track OR focus OR analyze. Captain's Log does all three, and with the daily digest, it *pushes* the value instead of waiting for you to pull it.
 
 ---
 
-## Sources
+## Current Version: 0.2.02
 
-- [Toggl: Best Time Tracking Apps 2026](https://toggl.com/blog/best-time-tracking-apps)
-- [Timing: Mac Time Tracking Apps](https://timingapp.com/blog/mac-time-tracking-apps/)
-- [Reclaim: Best Pomodoro Timer Apps](https://reclaim.ai/blog/best-pomodoro-timer-apps)
-- [Zapier: Best Pomodoro Apps](https://zapier.com/blog/best-pomodoro-apps/)
-- [Reclaim.ai](https://reclaim.ai)
-- [Clockwise](https://max-productive.ai/ai-tools/clockwise/)
-- [Flow App](https://www.flow.app/)
-- [ActivityWatch](https://activitywatch.net/)
-- [Cal Newport: Time Block Planner](https://www.timeblockplanner.com/)
-
----
-
-## The Core Problem
-
-**"Value not visible"** - We built sophisticated tracking and AI analysis, but the insights don't surface in a way that feels useful day-to-day.
-
-**Key Metric:** Deep Work Hours - concrete, meaningful, checkable daily.
-
-**Value Prop:** "AI Productivity Co-pilot - Get more done."
-
-The product has:
-- ✅ Activity tracking (excellent)
-- ✅ AI summaries (sophisticated)
-- ✅ Optimization engine (advanced)
-- ✅ Focus timer (complete)
-- ✅ Dashboard (functional)
-
-But the value is buried. Users need to **dig** to find insights instead of having insights **pushed** to them.
-
----
-
-## Success Metrics for Public Launch
-
-| Metric | Target |
-|--------|--------|
-| Day 1 retention | 70% check score next day |
-| Day 7 retention | 40% still using |
-| Time to value | < 5 minutes |
-| Can articulate value | "I save X hours/week" |
-| Referral | 10% share with friend |
-
----
-
-## The "Time Saved" Feature
-
-**Goal:** User sees concrete value and tells others
-
-**The Problem:**
-- Abstract metrics (switches, interrupts) don't feel real
-- No "aha" moment that makes users share
-- ROI isn't visible
-
-**The Fix - Time Saved Counter:**
-```
-This Week: 2.3 hours saved
-This Month: 8.5 hours saved
-
-How? You batched Slack checks (saved 45min)
-     You had 2 fewer meetings (saved 1h)
-     You avoided Twitter rabbit holes (saved 45min)
-```
-- Makes the invisible visible
-- Concrete, not abstract
-- Shareable ("I saved 8 hours this month!")
-
----
-
-## Simplified Product Vision
-
-**One sentence:** "Know where your time goes and get it back."
-
-**Core loop:**
-1. Wake up → See yesterday's score (motivation)
-2. Work → Menu bar shows live score (awareness)
-3. Slip → Gentle nudge (course correction)
-4. End day → See time saved (reward)
-5. End week → Email digest (reflection)
-6. Repeat
-
-**Key insight:** The goal isn't to show MORE data. It's to show the RIGHT data at the RIGHT time.
-
----
-
-## Implementation Priority (Week by Week)
-
-### Week 1: Core Engagement Loop
-- [ ] Simplify menu bar to show focus score number
-- [ ] Add morning notification with yesterday's highlight
-- [ ] Create "one number" dashboard view
-
-### Week 2: Progress & Motivation
-- [ ] Implement "Time Saved" calculation
-- [ ] Add weekly streak visualization
-- [ ] Create simple before/after comparison
-
-### Week 3: Polish & Share
-- [ ] Weekly email digest
-- [ ] Improve first-time experience
-- [ ] Add share capability ("I saved 8h this month with Captain's Log")
-
-### Week 4: Public Launch Prep
-- [ ] Landing page with clear value prop
-- [ ] Installation docs with screenshots
-- [ ] Demo mode for website
+See `CLAUDE.md` for implementation details and session history.

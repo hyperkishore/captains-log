@@ -356,7 +356,7 @@ bash "/Users/kishore/Library/Application Support/SwiftBar/Plugins/captains-log.1
 - Minor (Y): New features, significant improvements
 - Patch (Z): Bug fixes, small changes
 
-**Current Version: 0.2.02**
+**Current Version: 0.2.03**
 
 ### 5. Testing Changes
 ```bash
@@ -884,3 +884,52 @@ Added sections:
 - `CLAUDE.md` - This session log entry
 
 **Plan File**: `~/.claude/plans/frolicking-launching-island.md` contains the original 80/20 analysis
+
+### 2026-04-02: Holistic Rethink & Daily Digest System
+
+**Context**: After 2+ months of not using Captain's Log (Jan 30 - Apr 1), took a holistic look at what went wrong. Root cause: **no daily pull** — nothing brings you back. The daemon stopped and nobody noticed for 2 months.
+
+**ROADMAP.md Rewritten** with new vision:
+- **New vision**: "Your work, automatically journaled. Your time, honestly understood."
+- Honest assessment of usage data showing the abandonment gap
+- Roadmap reordered around "what makes you come back" instead of feature complexity
+- Phase 0: Foundation (daemon reliability) → Phase 1: Daily Pull (digests) → Phase 2: Time Understanding → Phase 3: Proactive AI
+
+**Daily Digest Notification System Built**:
+
+Files created:
+- `src/captains_log/notifications/__init__.py` - Module exports
+- `src/captains_log/notifications/notifier.py` - macOS notification sender via osascript
+- `src/captains_log/notifications/daily_digest.py` - Digest generator (app usage, focus hours, AI narrative)
+- `src/captains_log/notifications/scheduler.py` - Daemon scheduler (evening digest, morning briefing, health alerts)
+
+Files modified:
+- `src/captains_log/core/config.py` - Added `DigestConfig` (evening_time, morning_enabled, health_alerts)
+- `src/captains_log/core/orchestrator.py` - Integrated `NotificationScheduler` with periodic check loop
+- `src/captains_log/cli/main.py` - Added 4 new CLI commands
+
+**New CLI Commands**:
+```bash
+captains-log today                           # Quick glanceable day summary
+captains-log digest --date 2026-01-18        # Generate digest for any date
+captains-log digest --notify                 # Send as macOS notification
+captains-log week                            # This week vs last week comparison
+captains-log recall "what did I work on Thursday"  # Natural language query via Claude
+```
+
+**Digest Config** (config.yaml):
+```yaml
+digest:
+  enabled: true
+  evening_time: "18:00"
+  morning_enabled: false
+  morning_time: "09:00"
+  health_alerts: true
+```
+
+**Key Design Decisions**:
+- Evening digest at 6pm is the **primary habit trigger** — the one feature that was missing
+- Health alert if no activity in 1 hour during work hours (9-18) — prevents silent daemon death
+- `recall` command uses Claude Haiku for cost-effective natural language queries over activity history
+- Notification scheduler runs every 60 seconds inside the daemon, checks if it's time to send
+- Digests are idempotent per day — won't send twice for the same date
