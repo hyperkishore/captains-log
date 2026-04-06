@@ -11,7 +11,8 @@ PID_FILE="$HOME/Library/Application Support/CaptainsLog/daemon.pid"
 
 # Thresholds
 IDLE_THRESHOLD=300        # User is "active" if idle < 300 seconds
-STALE_THRESHOLD=600       # Daemon is "brain-dead" if last event > 600 seconds old
+STALE_THRESHOLD=1800      # Daemon is "brain-dead" if last event > 30 minutes old
+MIN_UPTIME=120            # Don't check daemon until it's been running > 2 minutes
 
 # Ensure log directory exists
 mkdir -p "$LOG_DIR"
@@ -41,6 +42,18 @@ if [ -z "$DAEMON_PID" ] || ! kill -0 "$DAEMON_PID" 2>/dev/null; then
 fi
 
 # Daemon is running — check if it's actually capturing events
+
+# Check daemon uptime — don't kill a freshly started daemon
+DAEMON_START=$(ps -o lstart= -p "$DAEMON_PID" 2>/dev/null)
+if [ -n "$DAEMON_START" ]; then
+    START_EPOCH=$(date -j -f "%a %b %d %T %Y" "$DAEMON_START" "+%s" 2>/dev/null)
+    if [ -n "$START_EPOCH" ]; then
+        UPTIME=$(($(date "+%s") - START_EPOCH))
+        if [ "$UPTIME" -lt "$MIN_UPTIME" ]; then
+            exit 0
+        fi
+    fi
+fi
 
 # Get macOS idle time in seconds
 IDLE_TIME=$(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print int($NF/1000000000); exit}')

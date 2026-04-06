@@ -139,13 +139,24 @@ export default function Dashboard() {
         setPareto(paretoData);
         setInsights(insightsData);
       } catch (error) {
-        console.error('Failed to fetch data, using demo mode:', error);
-        // Use demo data when API is unavailable
-        setStats(DEMO_STATS);
-        setTimeBlocks(DEMO_TIME_BLOCKS);
-        setPareto(DEMO_PARETO);
-        setInsights(DEMO_INSIGHTS);
-        setIsDemo(true);
+        console.error('Failed to fetch data:', error);
+        const errorMsg = error instanceof Error ? error.message : '';
+        const is404 = errorMsg.includes('404');
+        if (is404) {
+          // Date has no data - show empty state (not demo)
+          setStats({ date: dateStr, total_events: 0, unique_apps: 0, top_apps: [], hourly_breakdown: [] });
+          setTimeBlocks([]);
+          setPareto({ top_apps: [], rest_apps: [], top_percent: 0, ratio: '0/0' });
+          setInsights(null);
+          setIsDemo(false);
+        } else {
+          // API unreachable - show demo data
+          setStats(DEMO_STATS);
+          setTimeBlocks(DEMO_TIME_BLOCKS);
+          setPareto(DEMO_PARETO);
+          setInsights(DEMO_INSIGHTS);
+          setIsDemo(true);
+        }
       } finally {
         setLoading(false);
       }
@@ -215,20 +226,25 @@ export default function Dashboard() {
               <div>
                 <p className="font-semibold text-purple-300">Demo Mode</p>
                 <p className="text-sm text-slate-400">
-                  {cloudMode
-                    ? `Unable to load cloud data. Check console for details. (v${API_VERSION})`
-                    : 'Showing sample data. Install locally to track your activity.'}
+                  Showing sample data. Could not connect to the data source.
                 </p>
               </div>
             </div>
-            {!cloudMode && (
-              <a
-                href="/setup.html"
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium transition-colors"
-              >
-                Install Now
-              </a>
-            )}
+          </div>
+        )}
+
+        {/* No Data Banner */}
+        {!isDemo && !loading && stats && stats.total_events === 0 && (
+          <div className="bg-gradient-to-r from-slate-500/20 to-slate-600/20 border border-slate-500/30 rounded-xl p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-slate-500/20 flex items-center justify-center">
+              <AlertCircle className="w-5 h-5 text-slate-400" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-300">No data recorded</p>
+              <p className="text-sm text-slate-400">
+                No activity was tracked for {format(date, 'MMMM d, yyyy')}. Try selecting a different date.
+              </p>
+            </div>
           </div>
         )}
 

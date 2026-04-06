@@ -23,9 +23,6 @@ import type {
 // Local backend URL
 const LOCAL_API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8081';
 
-// Cloud API URL
-const CLOUD_API = process.env.NEXT_PUBLIC_CLOUD_API_URL || 'https://captainslog.hyperverge.space';
-
 // Get device ID from URL or localStorage
 export function getDeviceId(): string | null {
   if (typeof window === 'undefined') return null;
@@ -48,47 +45,41 @@ export function isCloudMode(): boolean {
   return getDeviceId() !== null;
 }
 
+// Check if we're running on the deployed Vercel site (not localhost)
+function isDeployed(): boolean {
+  if (typeof window === 'undefined') return false;
+  const hostname = window.location.hostname;
+  return hostname !== 'localhost' && hostname !== '127.0.0.1';
+}
+
 // Get the appropriate API base URL
 export function getApiBase(): string {
-  const deviceId = getDeviceId();
-  if (deviceId) {
-    return CLOUD_API;
+  if (isDeployed()) {
+    // On Vercel: use relative paths to hit Next.js API routes
+    return '';
   }
   return LOCAL_API;
 }
 
-// Get cloud URL with device ID prefix for endpoints
-function getCloudEndpoint(endpoint: string, deviceId: string): string {
-  // Transform /api/stats/2026-01-16 -> /api/{deviceId}/stats/2026-01-16
-  if (endpoint.startsWith('/api/stats/')) {
-    return endpoint.replace('/api/stats/', `/api/${deviceId}/stats/`);
-  }
-  if (endpoint.startsWith('/api/analytics/time-blocks/')) {
-    return endpoint.replace('/api/analytics/time-blocks/', `/api/${deviceId}/time-blocks/`);
-  }
-  if (endpoint.startsWith('/api/analytics/pareto/')) {
-    return endpoint.replace('/api/analytics/pareto/', `/api/${deviceId}/pareto/`);
-  }
-  if (endpoint.startsWith('/api/insights/daily/')) {
-    return endpoint.replace('/api/insights/daily/', `/api/${deviceId}/insights/`);
-  }
-  if (endpoint.startsWith('/api/analytics/focus/')) {
-    return endpoint.replace('/api/analytics/focus/', `/api/${deviceId}/focus/`);
-  }
-  // Default: not supported in cloud mode
-  return endpoint;
-}
 
 async function fetchAPI<T>(endpoint: string): Promise<T> {
-  const deviceId = getDeviceId();
+  const base = getApiBase();
   let url: string;
 
-  if (deviceId) {
-    // Cloud mode: use cloud API with device-prefixed endpoint
-    url = `${CLOUD_API}${getCloudEndpoint(endpoint, deviceId)}`;
+  if (base === '') {
+    // Deployed mode: use relative API paths directly
+    // The Next.js API routes handle reading from Supabase
+    const deviceId = getDeviceId();
+    if (deviceId) {
+      // Append device as query param so the API route can filter
+      const separator = endpoint.includes('?') ? '&' : '?';
+      url = `${endpoint}${separator}device=${deviceId}`;
+    } else {
+      url = endpoint;
+    }
   } else {
-    // Local mode: use local API
-    url = `${LOCAL_API}${endpoint}`;
+    // Local mode: use local Python API
+    url = `${base}${endpoint}`;
   }
 
   if (process.env.NODE_ENV === 'development') {
