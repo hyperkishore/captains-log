@@ -271,21 +271,29 @@ class CloudSync:
         return time_blocks
 
     async def _sync_summaries(self, session: aiohttp.ClientSession) -> int:
-        """Sync AI summaries to cloud."""
+        """Sync AI summaries to cloud.
+
+        Only syncs summaries that haven't been synced yet (synced_at IS NULL).
+        After successful upload, marks them with synced_at timestamp.
+        """
         async with aiosqlite.connect(self.config.db_path) as db:
             db.row_factory = aiosqlite.Row
 
-            # Get summaries from last 24 hours that haven't been synced
+            # Get only unsynced summaries
             async with db.execute(
                 """
-                SELECT * FROM summaries
-                WHERE period_start > datetime('now', '-1 day')
+                SELECT id, period_start, period_end, primary_app, activity_type,
+                       focus_score, key_activities, context, context_switches
+                FROM summaries
+                WHERE synced_at IS NULL
                 ORDER BY period_start DESC
                 LIMIT 100
                 """,
             ) as cursor:
                 summaries = []
+                summary_ids = []
                 async for row in cursor:
+                    summary_ids.append(row["id"])
                     summaries.append({
                         "period_start": row["period_start"],
                         "period_end": row["period_end"],
@@ -308,6 +316,16 @@ class CloudSync:
             if resp.status != 200:
                 text = await resp.text()
                 raise Exception(f"Failed to sync summaries: {resp.status} - {text}")
+
+        # Mark synced summaries with timestamp
+        async with aiosqlite.connect(self.config.db_path) as db:
+            placeholders = ",".join("?" * len(summary_ids))
+            await db.execute(
+                f"UPDATE summaries SET synced_at = datetime('now') WHERE id IN ({placeholders})",
+                summary_ids,
+            )
+            await db.commit()
+            logger.info(f"Marked {len(summary_ids)} summaries as synced")
 
         return len(summaries)
 

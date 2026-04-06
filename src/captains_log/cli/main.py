@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import logging.handlers
 import os
 import signal
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import typer
@@ -61,7 +62,14 @@ def setup_logging(log_level: str, log_file: Path | None = None) -> None:
 
     if log_file:
         log_file.parent.mkdir(parents=True, exist_ok=True)
-        handlers.append(logging.FileHandler(log_file))
+        # Use RotatingFileHandler to prevent unbounded log growth
+        # maxBytes=1MB, keep 5 backups (6MB max total)
+        rotating_handler = logging.handlers.RotatingFileHandler(
+            log_file,
+            maxBytes=1_048_576,
+            backupCount=5,
+        )
+        handlers.append(rotating_handler)
 
     logging.basicConfig(
         level=level,
@@ -1927,25 +1935,47 @@ def today() -> None:
     config = get_config()
 
     async def get_today():
-        from captains_log.notifications.daily_digest import DailyDigestGenerator
         from captains_log.storage.database import Database
+        from captains_log.summarizers.duration_calculator import (
+            _format_duration,
+            get_app_durations,
+            get_category_durations,
+            get_focus_hours,
+            get_most_focused_hour,
+            get_total_active_hours,
+        )
 
         db = Database(config.db_path)
         await db.connect()
 
         try:
-            generator = DailyDigestGenerator(db)
-            return await generator.generate()
+            today_str = datetime.now().strftime("%Y-%m-%d")
+
+            active_hours = await get_total_active_hours(db, today_str)
+            focus_hrs = await get_focus_hours(db, today_str)
+            app_durs = await get_app_durations(db, today_str)
+            cat_durs = await get_category_durations(db, today_str)
+            focused_hour = await get_most_focused_hour(db, today_str)
+
+            return {
+                "date": today_str,
+                "active_hours": active_hours,
+                "focus_hours": focus_hrs,
+                "app_durations": app_durs,
+                "category_durations": cat_durs,
+                "most_focused_hour": focused_hour,
+                "fmt": _format_duration,
+            }
         finally:
             await db.close()
 
     try:
-        digest = asyncio.run(get_today())
+        data = asyncio.run(get_today())
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1)
 
-    if digest.total_active_minutes < 1:
+    if data["active_hours"] < 0.02:  # less than ~1 minute
         console.print(Panel(
             "[yellow]No activity recorded today.[/yellow]\n\n"
             "Is the daemon running? Check: captains-log status",
@@ -1954,9 +1984,42 @@ def today() -> None:
         ))
         return
 
+    fmt = data["fmt"]
+    lines = []
+    lines.append(f"  Date: {data['date']}")
+    lines.append(
+        f"  Active: {fmt(data['active_hours'] * 60)}    "
+        f"Focus: {fmt(data['focus_hours'] * 60)}"
+    )
+    lines.append("")
+
+    # App duration breakdown
+    app_durs = data["app_durations"]
+    if app_durs:
+        lines.append("  Apps:")
+        max_name = max(len(n) for n in app_durs)
+        max_mins = max(app_durs.values()) if app_durs else 1
+        for name, mins in list(app_durs.items())[:10]:
+            bar_len = int(mins / max_mins * 20) if max_mins > 0 else 0
+            bar = "\u2588" * bar_len
+            lines.append(f"    {name:<{max_name}}  {fmt(mins):>7}  {bar}")
+        lines.append("")
+
+    # Category breakdown
+    cat_durs = data["category_durations"]
+    if cat_durs:
+        lines.append("  Categories:")
+        for cat, mins in cat_durs.items():
+            lines.append(f"    {cat:<16} {fmt(mins):>7}")
+        lines.append("")
+
+    # Most focused hour
+    if data["most_focused_hour"]:
+        lines.append(f"  Most focused hour: {data['most_focused_hour']}")
+
     console.print(Panel(
-        digest.to_rich_text(),
-        title=f"Today — {digest.date}",
+        "\n".join(lines),
+        title=f"Today \u2014 {data['date']}",
         border_style="green",
     ))
 
@@ -2019,8 +2082,13 @@ def week() -> None:
     config = get_config()
 
     async def get_week_data():
-        from captains_log.notifications.daily_digest import DailyDigestGenerator
         from captains_log.storage.database import Database
+        from captains_log.summarizers.duration_calculator import (
+            get_app_durations,
+            get_category_durations,
+            get_focus_hours,
+            get_total_active_hours,
+        )
 
         db = Database(config.db_path)
         await db.connect()
@@ -2033,21 +2101,35 @@ def week() -> None:
             this_monday = now - timedelta(days=days_since_monday)
             last_monday = this_monday - timedelta(days=7)
 
-            generator = DailyDigestGenerator(db)
-
             # Compute each day this week
             this_week_days = []
             for i in range(days_since_monday + 1):
                 day = this_monday + timedelta(days=i)
-                d = await generator.generate(day)
-                this_week_days.append(d)
+                ds = day.strftime("%Y-%m-%d")
+                active = await get_total_active_hours(db, ds)
+                focus = await get_focus_hours(db, ds)
+                apps = await get_app_durations(db, ds)
+                cats = await get_category_durations(db, ds)
+                this_week_days.append({
+                    "date": ds,
+                    "active_hours": active,
+                    "focus_hours": focus,
+                    "app_durations": apps,
+                    "category_durations": cats,
+                })
 
             # Compute each day last week
             last_week_days = []
             for i in range(7):
                 day = last_monday + timedelta(days=i)
-                d = await generator.generate(day)
-                last_week_days.append(d)
+                ds = day.strftime("%Y-%m-%d")
+                active = await get_total_active_hours(db, ds)
+                focus = await get_focus_hours(db, ds)
+                last_week_days.append({
+                    "date": ds,
+                    "active_hours": active,
+                    "focus_hours": focus,
+                })
 
             return this_week_days, last_week_days, days_since_monday
         finally:
@@ -2059,55 +2141,313 @@ def week() -> None:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1)
 
-    this_total = sum(d.total_active_minutes for d in this_week)
-    last_total = sum(d.total_active_minutes for d in last_week)
+    from captains_log.summarizers.duration_calculator import _format_duration
 
-    # Format hours
-    def fmt_hours(mins: float) -> str:
-        h = int(mins // 60)
-        m = int(mins % 60)
-        return f"{h}h {m}m" if h > 0 else f"{m}m"
+    fmt = _format_duration
+
+    this_active_hrs = sum(d["active_hours"] for d in this_week)
+    last_active_hrs = sum(d["active_hours"] for d in last_week)
+    this_focus_hrs = sum(d["focus_hours"] for d in this_week)
+    last_focus_hrs = sum(d["focus_hours"] for d in last_week)
 
     lines = []
-    lines.append(f"  This week:  {fmt_hours(this_total)}  ({days_done + 1} days)")
-    lines.append(f"  Last week:  {fmt_hours(last_total)}  (7 days)")
+    lines.append(
+        f"  This week:  {fmt(this_active_hrs * 60)} active, "
+        f"{fmt(this_focus_hrs * 60)} focus  ({days_done + 1} days)"
+    )
+    lines.append(
+        f"  Last week:  {fmt(last_active_hrs * 60)} active, "
+        f"{fmt(last_focus_hrs * 60)} focus  (7 days)"
+    )
 
-    if last_total > 0:
-        # Compare proportionally (this_week extrapolated to 7 days)
-        if days_done > 0:
-            projected = (this_total / (days_done + 1)) * 7
-            diff = ((projected - last_total) / last_total) * 100
-            direction = "up" if diff > 0 else "down"
-            color = "green" if diff > 0 else "red"
-            lines.append(f"  Trend:      [{color}]{abs(diff):.0f}% {direction}[/{color}] (projected)")
+    if last_active_hrs > 0 and days_done > 0:
+        projected = (this_active_hrs / (days_done + 1)) * 7
+        diff = ((projected - last_active_hrs) / last_active_hrs) * 100
+        direction = "up" if diff > 0 else "down"
+        color = "green" if diff > 0 else "red"
+        lines.append(f"  Trend:      [{color}]{abs(diff):.0f}% {direction}[/{color}] (projected)")
     lines.append("")
 
-    # Per-day breakdown
-    lines.append("  Day-by-day:")
+    # Per-day breakdown with active + focus hours
+    lines.append("  Day-by-day:                Active   Focus")
     day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     for i, d in enumerate(this_week):
-        bar_len = int(d.total_active_minutes / 30) if d.total_active_minutes > 0 else 0
-        bar = "\u2588" * min(bar_len, 20)
-        lines.append(f"    {day_names[i]}  {fmt_hours(d.total_active_minutes):>7}  {bar}")
+        bar_len = int(d["active_hours"] * 2) if d["active_hours"] > 0 else 0
+        bar = "\u2588" * min(bar_len, 16)
+        lines.append(
+            f"    {day_names[i]}  {fmt(d['active_hours'] * 60):>7}  "
+            f"{fmt(d['focus_hours'] * 60):>7}  {bar}"
+        )
 
-    # Top apps across the week
+    # Top apps across the week (by duration)
     app_totals: dict[str, float] = {}
     for d in this_week:
-        for a in d.top_apps:
-            app_totals[a.app_name] = app_totals.get(a.app_name, 0) + a.minutes
+        for app_name, mins in d["app_durations"].items():
+            app_totals[app_name] = app_totals.get(app_name, 0) + mins
 
     if app_totals:
         lines.append("")
         lines.append("  Top apps this week:")
         sorted_apps = sorted(app_totals.items(), key=lambda x: x[1], reverse=True)[:5]
         for name, mins in sorted_apps:
-            lines.append(f"    {name:<20} {fmt_hours(mins)}")
+            lines.append(f"    {name:<20} {fmt(mins)}")
+
+    # Category breakdown for the week
+    cat_totals: dict[str, float] = {}
+    for d in this_week:
+        for cat, mins in d["category_durations"].items():
+            cat_totals[cat] = cat_totals.get(cat, 0) + mins
+
+    if cat_totals:
+        lines.append("")
+        lines.append("  Categories this week:")
+        sorted_cats = sorted(cat_totals.items(), key=lambda x: x[1], reverse=True)
+        for cat, mins in sorted_cats:
+            lines.append(f"    {cat:<16} {fmt(mins)}")
 
     console.print(Panel(
         "\n".join(lines),
         title="Week Summary",
         border_style="blue",
     ))
+
+
+@app.command()
+def insights(
+    days: int = typer.Option(14, "--days", "-d", help="Days of history to analyze"),
+) -> None:
+    """Show detected focus patterns from your activity history."""
+    config = get_config()
+
+    async def get_insights():
+        from captains_log.insights.pattern_detector import PatternDetector
+
+        detector = PatternDetector(str(config.db_path))
+        return await detector.get_all_insights(days=days)
+
+    console.print(f"[dim]Analyzing {days} days of activity...[/dim]\n")
+
+    try:
+        patterns = asyncio.run(get_insights())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Filter out patterns with no meaningful data
+    has_data = False
+
+    for pattern in patterns:
+        if pattern.pattern_type == "peak_hours":
+            peak_hours = pattern.data.get("peak_hours", [])
+            if peak_hours:
+                has_data = True
+                lines = []
+                lines.append("[bold cyan]Peak Hours[/bold cyan]")
+                for ph in peak_hours:
+                    lines.append(
+                        f"  {ph['label']}  "
+                        f"[green]{ph['avg_focus_minutes']:.0f}m[/green] focused, "
+                        f"[dim]{ph['avg_switches']:.0f} switches/hr[/dim]"
+                    )
+                console.print(Panel("\n".join(lines), border_style="cyan"))
+            else:
+                console.print(Panel(
+                    "[dim]Not enough data to detect peak hours.[/dim]",
+                    title="Peak Hours",
+                    border_style="dim",
+                ))
+
+        elif pattern.pattern_type == "context_switch_spike":
+            spike_hours = pattern.data.get("spike_hours", [])
+            daily_avg = pattern.data.get("daily_avg_switches", 0)
+            if spike_hours:
+                has_data = True
+                lines = []
+                lines.append("[bold yellow]Context Switch Spikes[/bold yellow]")
+                lines.append(f"  [dim]Daily avg: {daily_avg:.0f} switches[/dim]")
+                for sh in spike_hours[:5]:
+                    lines.append(
+                        f"  {sh['label']}  "
+                        f"[red]{sh['avg_switches']:.0f}[/red] switches/hr"
+                    )
+                console.print(Panel("\n".join(lines), border_style="yellow"))
+            else:
+                console.print(Panel(
+                    f"[dim]No significant context switch spikes detected.\n"
+                    f"Daily avg: {daily_avg:.0f} switches[/dim]",
+                    title="Context Switches",
+                    border_style="dim",
+                ))
+
+        elif pattern.pattern_type == "weekly_rhythm":
+            day_averages = pattern.data.get("day_averages", [])
+            most = pattern.data.get("most_productive")
+            least = pattern.data.get("least_productive")
+            if day_averages:
+                has_data = True
+                lines = []
+                lines.append("[bold blue]Weekly Rhythm[/bold blue]")
+                if most:
+                    lines.append(
+                        f"  Best:  [green]{most['day']}[/green] "
+                        f"({most['avg_hours']:.1f}h avg)"
+                    )
+                if least:
+                    lines.append(
+                        f"  Worst: [red]{least['day']}[/red] "
+                        f"({least['avg_hours']:.1f}h avg)"
+                    )
+                lines.append("")
+                # Bar chart of days
+                max_hrs = max(d["avg_hours"] for d in day_averages) if day_averages else 1
+                for d in sorted(day_averages, key=lambda x: x["dow"]):
+                    bar_len = int(d["avg_hours"] / max_hrs * 16) if max_hrs > 0 else 0
+                    bar = "\u2588" * bar_len
+                    lines.append(f"  {d['day_short']}  {d['avg_hours']:>5.1f}h  {bar}")
+                console.print(Panel("\n".join(lines), border_style="blue"))
+            else:
+                console.print(Panel(
+                    "[dim]Not enough data to detect weekly rhythm.[/dim]",
+                    title="Weekly Rhythm",
+                    border_style="dim",
+                ))
+
+    if not has_data:
+        console.print(
+            "\n[yellow]No patterns detected yet. "
+            "Keep the daemon running for a few days to accumulate data.[/yellow]"
+        )
+
+
+@app.command(name="weekly")
+def weekly_cmd(
+    week_offset: int = typer.Option(0, "--offset", "-o", help="Weeks ago (0=current)"),
+) -> None:
+    """Show comprehensive weekly digest with trends."""
+    config = get_config()
+
+    async def get_weekly():
+        from captains_log.notifications.weekly_digest import WeeklyDigestGenerator
+        from captains_log.storage.database import Database
+
+        db = Database(config.db_path)
+        await db.connect()
+
+        try:
+            generator = WeeklyDigestGenerator(db)
+            ref_date = date.today() - timedelta(weeks=week_offset)
+            return await generator.generate(week_of=ref_date)
+        finally:
+            await db.close()
+
+    try:
+        digest = asyncio.run(get_weekly())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    from captains_log.summarizers.duration_calculator import _format_duration
+
+    fmt = _format_duration
+
+    # ── Header with totals and trends ──────────────────────────────────── #
+    active_trend = digest.active_trend_percent
+    focus_trend = digest.focus_trend_percent
+
+    def _trend_str(pct: float) -> str:
+        if abs(pct) < 0.5:
+            return "[dim]--[/dim]"
+        color = "green" if pct > 0 else "red"
+        arrow = "+" if pct > 0 else ""
+        return f"[{color}]{arrow}{pct:.0f}%[/{color}]"
+
+    header_lines = []
+    header_lines.append(
+        f"  Active: {fmt(digest.total_active_hours * 60):>7}  "
+        f"({_trend_str(active_trend)} vs prev week)"
+    )
+    header_lines.append(
+        f"  Focus:  {fmt(digest.focus_hours * 60):>7}  "
+        f"({_trend_str(focus_trend)} vs prev week)"
+    )
+    header_lines.append(
+        f"  Prev:   {fmt(digest.prev_week_active_hours * 60):>7} active, "
+        f"{fmt(digest.prev_week_focus_hours * 60)} focus"
+    )
+
+    if digest.most_productive_day:
+        header_lines.append(
+            f"  Best day: [green]{digest.most_productive_day}[/green]    "
+            f"Worst: [red]{digest.least_productive_day}[/red]"
+        )
+
+    console.print(Panel(
+        "\n".join(header_lines),
+        title=f"Weekly Digest \u2014 {digest.week_start.isoformat()} to {digest.week_end.isoformat()}",
+        border_style="blue",
+    ))
+
+    # ── Daily breakdown ───────────────────────────────────────────────── #
+    table = Table(title="Daily Breakdown", show_header=True, header_style="bold cyan")
+    table.add_column("Day", min_width=6)
+    table.add_column("Date", min_width=10)
+    table.add_column("Active", justify="right", min_width=7)
+    table.add_column("Focus", justify="right", min_width=7)
+    table.add_column("Chart", min_width=18)
+
+    max_hrs = max((d["active_hours"] for d in digest.daily_breakdown), default=1) or 1
+
+    for d in digest.daily_breakdown:
+        bar_len = int(d["active_hours"] / max_hrs * 16) if max_hrs > 0 else 0
+        focus_len = int(d["focus_hours"] / max_hrs * 16) if max_hrs > 0 else 0
+        # Show focus as green blocks, remaining active as blue blocks
+        bar = "[green]" + "\u2588" * focus_len + "[/green]"
+        if bar_len > focus_len:
+            bar += "[blue]" + "\u2588" * (bar_len - focus_len) + "[/blue]"
+
+        table.add_row(
+            d["day_name"][:3],
+            d["date"],
+            fmt(d["active_hours"] * 60),
+            fmt(d["focus_hours"] * 60),
+            bar,
+        )
+
+    console.print(table)
+    console.print("[dim]  Chart: [green]\u2588[/green] focus  [blue]\u2588[/blue] other active[/dim]")
+    console.print()
+
+    # ── Top apps ──────────────────────────────────────────────────────── #
+    if digest.top_apps:
+        table = Table(title="Top Apps", show_header=True, header_style="bold cyan")
+        table.add_column("App", min_width=20)
+        table.add_column("Hours", justify="right", min_width=7)
+
+        for app_info in digest.top_apps[:8]:
+            table.add_row(app_info["app"], f"{app_info['hours']:.1f}h")
+
+        console.print(table)
+        console.print()
+
+    # ── Categories ────────────────────────────────────────────────────── #
+    if digest.category_hours:
+        table = Table(title="Categories", show_header=True, header_style="bold cyan")
+        table.add_column("Category", min_width=16)
+        table.add_column("Hours", justify="right", min_width=7)
+
+        for cat, hrs in digest.category_hours.items():
+            table.add_row(cat, f"{hrs:.1f}h")
+
+        console.print(table)
+        console.print()
+
+    # ── Narrative ─────────────────────────────────────────────────────── #
+    if digest.narrative:
+        console.print(Panel(
+            f"[italic]{digest.narrative}[/italic]",
+            title="Summary",
+            border_style="dim",
+        ))
 
 
 @app.command()

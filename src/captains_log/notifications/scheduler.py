@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import subprocess
 from datetime import datetime, time, timedelta
 from typing import Any
 
@@ -138,8 +140,37 @@ class NotificationScheduler:
         except Exception as e:
             logger.error(f"Failed to generate morning briefing: {e}")
 
+    def _get_macos_idle_seconds(self) -> int | None:
+        """Get macOS user idle time in seconds via IOKit.
+
+        Returns None if idle time cannot be determined.
+        """
+        try:
+            result = subprocess.run(
+                ["ioreg", "-c", "IOHIDSystem"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode != 0:
+                return None
+
+            for line in result.stdout.splitlines():
+                if "HIDIdleTime" in line:
+                    # Extract the nanosecond value and convert to seconds
+                    match = re.search(r"= (\d+)", line)
+                    if match:
+                        return int(match.group(1)) // 1_000_000_000
+            return None
+        except Exception:
+            return None
+
     async def _check_daemon_health(self, now: datetime) -> None:
-        """Alert if no activity has been logged recently."""
+        """Alert if no activity has been logged recently.
+
+        Only fires if the user is actively using the Mac (idle < 300s).
+        Skips the alert if the user is away (idle, lunch, meetings, etc.).
+        """
         # Only check once per hour
         if self._last_health_check and (now - self._last_health_check).seconds < 3600:
             return
@@ -147,6 +178,12 @@ class NotificationScheduler:
         self._last_health_check = now
 
         try:
+            # Check macOS idle time first — skip alert if user is away
+            idle_seconds = self._get_macos_idle_seconds()
+            if idle_seconds is not None and idle_seconds >= 300:
+                logger.info(f"Skipping health alert: user is idle ({idle_seconds}s)")
+                return
+
             one_hour_ago = (now - timedelta(hours=1)).isoformat()
             row = await self.db.fetch_one(
                 "SELECT COUNT(*) as cnt FROM activity_logs WHERE timestamp > ?",

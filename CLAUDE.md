@@ -25,14 +25,33 @@ captains-log/
 │   │   └── screenshot_manager.py  # Screenshot file/DB management
 │   │
 │   ├── ai/                   # AI summarization (Phase 3)
-│   │   ├── claude_client.py  # Anthropic API with vision support
+│   │   ├── claude_client.py  # Anthropic API (claude-haiku-4-5)
 │   │   ├── batch_processor.py # Queue management for batch API
 │   │   ├── prompts.py        # Prompt templates
 │   │   └── schemas.py        # Pydantic response models
 │   │
 │   ├── summarizers/          # Summary generation
 │   │   ├── five_minute.py    # 5-min activity summarizer
-│   │   └── focus_calculator.py # Focus score algorithm
+│   │   ├── focus_calculator.py # Focus score algorithm
+│   │   └── duration_calculator.py # Time-in-app duration from event gaps
+│   │
+│   ├── insights/             # Historical pattern analysis
+│   │   └── pattern_detector.py # Peak hours, context switch spikes, weekly rhythms
+│   │
+│   ├── notifications/        # macOS notification system
+│   │   ├── notifier.py       # osascript notification sender
+│   │   ├── daily_digest.py   # Digest generator with duration data
+│   │   └── scheduler.py      # Daemon scheduler (evening/morning/health)
+│   │
+│   ├── optimization/         # Time optimization engine
+│   │   ├── schemas.py        # Data models
+│   │   ├── interrupt_detector.py
+│   │   ├── context_switch_analyzer.py
+│   │   ├── deal_classifier.py
+│   │   ├── meeting_fragmentation.py
+│   │   ├── daily_briefing.py
+│   │   ├── weekly_report.py
+│   │   └── nudge_system.py
 │   │
 │   ├── cli/                  # Command-line interface
 │   │   ├── main.py           # Typer CLI commands
@@ -43,7 +62,16 @@ captains-log/
 │       ├── routes/           # API and page routes
 │       └── templates/        # Jinja2 HTML templates
 │
-├── resources/launchd/        # launchd plist template
+├── scripts/
+│   └── daemon-watchdog.sh    # Liveness watchdog (launchd cron)
+│
+├── frontend/                 # Next.js frontend (captainslog.hyperverge.space)
+│   ├── src/app/              # App router pages
+│   ├── src/components/       # UI components
+│   ├── src/lib/              # API, auth, types
+│   └── supabase-schema.sql   # Cloud database schema
+│
+├── resources/launchd/        # launchd plist templates
 ├── pyproject.toml            # Project dependencies
 ├── Makefile                  # Build automation
 └── README.md                 # User documentation
@@ -129,6 +157,7 @@ return "ACTIVE"
 ## CLI Commands
 
 ```bash
+# Daemon management
 captains-log start [-f]      # Start daemon
 captains-log stop            # Stop daemon
 captains-log status          # Show status
@@ -136,6 +165,28 @@ captains-log health          # Detailed health
 captains-log dashboard       # Web UI
 captains-log logs [-f]       # View logs
 captains-log install         # Auto-start setup
+
+# Daily insights
+captains-log today           # Duration breakdown by app/category, focus hours
+captains-log week            # This week vs last week, daily breakdown, projections
+captains-log digest [--date] [--notify]  # Daily digest (optional date, send notification)
+captains-log recall "query"  # Natural language query via Claude
+
+# Weekly & patterns
+captains-log weekly          # Weekly digest with trends
+captains-log insights        # Detected patterns from 14+ days of history
+
+# Focus sessions
+captains-log focus -g "Deep work" -t 120 -a "VS Code,Terminal" --sessions 4
+captains-log focus-status    # Today's sessions
+captains-log focus-goals     # List goals
+captains-log focus-timer pause|resume|skip
+captains-log focus-stop
+
+# Optimization
+captains-log optimize        # DEAL breakdown, interrupts, switches
+captains-log optimize-briefing  # Morning summary
+captains-log optimize-report # Weekly comprehensive report
 ```
 
 ## Database Schema (Key Tables)
@@ -172,11 +223,18 @@ CREATE TABLE summaries (
 
 - [x] **Phase 1**: Core Daemon - Activity tracking, CLI, Web Dashboard
 - [x] **Phase 2**: Screenshot Capture - CoreGraphics, WebP compression, app-change triggers
-- [x] **Phase 3**: AI Summaries - Claude Haiku, Batch API, vision support, focus calculator
+- [x] **Phase 3**: AI Summaries - Claude Haiku 4.5, Batch API, vision support, focus calculator
 - [x] **Phase 4**: Focus UI/UX - Menu bar app, floating widget, goal streaks, one-click start
-- [ ] **Phase 5**: Calendar Integration - macOS EventKit, smart suggestions (NEXT)
-- [ ] **Phase 6**: Proactive AI - Morning/evening notifications, nudges
-- [ ] **Phase 7**: Social/Growth - Shareable weekly summaries, milestones
+- [x] **Phase 0 (Reliability)**: Daemon watchdog, launchd auto-restart, log rotation, smart health alerts, sync dedup
+- [x] **Phase 1 (Daily Pull)**: Duration calculator, `today`/`week` CLI with duration data, daily digest with durations
+- [x] **Phase 2 (Insights)**: Pattern detector, `insights`/`weekly` CLI, weekly digest generator
+- [x] **Infrastructure**: Vercel deployment, Supabase auth, cloud sync, custom domain
+- [ ] **Phase 3 (Next)**: Menu bar live focus hours, notification verification, morning briefing
+- [ ] **Phase 4 (Next)**: Dashboard landing page with charts
+- [ ] **Phase 5**: Proactive AI - Anomaly nudges, scheduled notifications
+- [ ] **Phase 6**: Advanced Insights - Meeting fragmentation, time saved counter, email digest
+- [ ] **Phase 7**: Calendar Integration - macOS EventKit, smart suggestions
+- [ ] **Phase 8**: Emotional Design & Social - Milestones, streaks, shareable cards
 
 See `ROADMAP.md` for detailed product roadmap.
 
@@ -475,7 +533,7 @@ captains-log summaries-process          # Process pending queue
 ```yaml
 summarization:
   enabled: true
-  model: claude-3-5-haiku-20241022
+  model: claude-haiku-4-5-20251001  # Updated from deprecated claude-3-5-haiku-20241022
   use_batch_api: true
   batch_interval_hours: 6
   vision_enabled: true
@@ -933,3 +991,74 @@ digest:
 - `recall` command uses Claude Haiku for cost-effective natural language queries over activity history
 - Notification scheduler runs every 60 seconds inside the daemon, checks if it's time to send
 - Digests are idempotent per day — won't send twice for the same date
+
+### 2026-04-06: Reliability, Daily Pull & Insights Overhaul
+
+**Context**: Systematic implementation of the three tiers identified in the Apr 2 rethink: Reliability, Daily Pull, and Insights. All three root causes of abandonment addressed in a single session.
+
+#### Tier 1: Reliability (DONE)
+
+**Files Created**:
+- `scripts/daemon-watchdog.sh` - Liveness watchdog: 60-second cron checks last event timestamp + IOKit idle time, detects brain-dead daemon (alive process but no events), kills and restarts via launchd
+- launchd plist for watchdog cron
+
+**Changes**:
+1. **Daemon liveness watchdog** — separate process from daemon itself, so it can detect when the daemon is alive but not logging events
+2. **Sync deduplication** — added `synced_at` column to summaries table; only syncs unsynced rows, eliminating re-upload of same 13 summaries every 5 min
+3. **Log rotation** — `RotatingFileHandler` with 1MB max, 5 backups (6MB total cap)
+4. **Smart health alerts** — checks IOKit idle time before alerting; no more false positives during lunch/meetings
+5. **launchd auto-restart** — daemon plist with `KeepAlive=true`, `RunAtLoad=true`, `ThrottleInterval=30`
+6. **AI model update** — from deprecated `claude-3-5-haiku-20241022` to `claude-haiku-4-5-20251001`
+7. **Cloud sync URL fix** — pointed to new `captainslog.hyperverge.space` Vercel deployment
+8. **Async bug fix** — properly closes unawaited coroutine in `OptimizationEngine.on_activity`
+
+#### Tier 2: Daily Pull (DONE)
+
+**Files Created**:
+- `src/captains_log/summarizers/duration_calculator.py` - Time-in-app duration calculator from event gaps (caps at 30min, handles AWAY status, categorizes apps)
+
+**Files Modified**:
+- `src/captains_log/cli/main.py` - Updated `today` command (duration breakdown by app/category, focus hours, most focused hour); updated `week` command (this week vs last week with duration data, daily breakdown, top apps, categories, projected trends)
+- `src/captains_log/notifications/daily_digest.py` - Updated to include duration data
+
+**Key Design Decisions**:
+- Duration is calculated from event gaps (time between consecutive app switch events), not from idle time or summaries
+- Max gap capped at 30 minutes to handle cases where daemon stops/starts
+- AWAY status events excluded from productive time
+- Apps categorized into: Development, Communication, Browsing, Writing, Design, Media, Other
+
+#### Tier 3: Insights (DONE)
+
+**Files Created**:
+- `src/captains_log/insights/pattern_detector.py` - Detects peak productive hours, context switch spikes, weekly rhythm patterns from 14+ days of history
+- Weekly digest generator - comprehensive weekly summary with trends
+
+**CLI Commands Added**:
+- `captains-log insights` - Shows detected patterns from historical data
+- `captains-log weekly` - Shows weekly digest with trends
+
+#### Infrastructure (DONE)
+
+- **Vercel deployment** — Next.js frontend at `captainslog.hyperverge.space`
+- **Supabase auth** — Google OAuth with `@hyperverge.co` domain restriction
+- **Cloud sync** — daemon syncs daily stats and AI summaries to Supabase via Next.js API routes
+- **Custom domain** — added as Vercel custom domain to bypass team SSO protection
+
+#### What's Next
+
+**Immediate priorities**:
+1. Menu bar showing live focus hours ("4.2h focused")
+2. Evening digest notification verification (confirm it fires daily)
+3. Morning briefing opt-in
+
+**Dashboard priorities**:
+1. Landing page with time breakdown charts
+2. Today's activity donut chart by category
+3. Weekly focus hours bar chart (Mon-Sun)
+4. Streak visualization
+
+**Later**:
+- Meeting fragmentation score
+- "Time saved" counter
+- Weekly email digest option
+- Calendar integration (EventKit)

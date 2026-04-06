@@ -193,7 +193,7 @@ For technologies, list specific frameworks/languages visible (React, Python, Doc
 
     try:
         response = client.messages.create(
-            model="claude-3-5-haiku-20241022",
+            model="claude-haiku-4-5-20251001",
             max_tokens=500,
             messages=[
                 {
@@ -249,7 +249,7 @@ For technologies, list specific frameworks/languages visible (React, Python, Doc
         result["context_richness"] = context_richness
 
         # Add metadata
-        result["model"] = "claude-3-5-haiku-20241022"
+        result["model"] = "claude-haiku-4-5-20251001"
         result["tokens_used"] = response.usage.input_tokens + response.usage.output_tokens
         input_cost = response.usage.input_tokens * 0.25 / 1_000_000
         output_cost = response.usage.output_tokens * 1.25 / 1_000_000

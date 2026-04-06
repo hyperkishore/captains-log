@@ -99,10 +99,12 @@ export default function Dashboard() {
     setDeviceId(id);
     setCloudMode(isCloudMode());
     // Debug logging
-    console.log('[Captain\'s Log] Version:', API_VERSION);
-    console.log('[Captain\'s Log] Device ID:', id);
-    console.log('[Captain\'s Log] Cloud Mode:', isCloudMode());
-    console.log('[Captain\'s Log] API Base:', getApiBase());
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Captain\'s Log] Version:', API_VERSION);
+      console.log('[Captain\'s Log] Device ID:', id);
+      console.log('[Captain\'s Log] Cloud Mode:', isCloudMode());
+      console.log('[Captain\'s Log] API Base:', getApiBase());
+    }
   }, []);
 
   // Generate share URL

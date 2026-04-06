@@ -21,10 +21,10 @@ import type {
 } from './types';
 
 // Local backend URL
-const LOCAL_API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8082';
+const LOCAL_API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8081';
 
-// Cloud API URL (Railway)
-const CLOUD_API = process.env.NEXT_PUBLIC_CLOUD_API_URL || 'https://generous-gentleness-production.up.railway.app';
+// Cloud API URL
+const CLOUD_API = process.env.NEXT_PUBLIC_CLOUD_API_URL || 'https://captainslog.hyperverge.space';
 
 // Get device ID from URL or localStorage
 export function getDeviceId(): string | null {
@@ -91,19 +91,27 @@ async function fetchAPI<T>(endpoint: string): Promise<T> {
     url = `${LOCAL_API}${endpoint}`;
   }
 
-  console.log(`[Captain's Log] Fetching: ${url}`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[Captain's Log] Fetching: ${url}`);
+  }
 
   try {
     const res = await fetch(url);
     if (!res.ok) {
-      console.error(`[Captain's Log] API error: ${res.status} ${res.statusText} for ${url}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.error(`[Captain's Log] API error: ${res.status} ${res.statusText} for ${url}`);
+      }
       throw new Error(`API error: ${res.status} ${res.statusText}`);
     }
     const data = await res.json();
-    console.log(`[Captain's Log] Success: ${endpoint}`, data);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Captain's Log] Success: ${endpoint}`, data);
+    }
     return data;
   } catch (error) {
-    console.error(`[Captain's Log] Fetch failed for ${url}:`, error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error(`[Captain's Log] Fetch failed for ${url}:`, error);
+    }
     throw error;
   }
 }

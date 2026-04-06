@@ -11,13 +11,97 @@
             <p class="text-gray-500">{{ date }}{% if screenshot_count %} · {{ screenshot_count }} screenshots{% endif %}</p>
         </div>
         <div class="flex items-center space-x-2">
-            <select id="date-select" class="rounded-lg border-gray-300 text-sm focus:ring-blue-500 focus:border-blue-500" onchange="window.location.href='/timeline?date=' + this.value">
+            <select id="date-select" class="rounded-lg border-gray-300 text-sm focus:ring-blue-500 focus:border-blue-500" onchange="navigateWithFilters(this.value)">
                 {% for d in available_dates %}
                 <option value="{{ d }}" {% if d == date %}selected{% endif %}>{{ d }}</option>
                 {% endfor %}
             </select>
         </div>
     </div>
+
+    <script>
+    function navigateWithFilters(newDate) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('date', newDate);
+        window.location.href = '/timeline?' + params.toString();
+    }
+    </script>
+
+    <!-- Active Filters Bar -->
+    {% if is_filtered %}
+    <div style="background: #f5f5f7; border: 1px solid #d1d1d6; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <span style="font-size: 14px; font-weight: 500; color: #1d1d1f;">Active Filters:</span>
+
+                {% if active_filters.app %}
+                <span style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #0071e3; color: white; border-radius: 16px; font-size: 13px; font-weight: 500;">
+                    App: {{ active_filters.app }}
+                    <a href="/timeline?date={{ date }}{% if active_filters.category %}&category={{ active_filters.category | urlencode }}{% endif %}{% if active_filters.project %}&project={{ active_filters.project | urlencode }}{% endif %}{% if active_filters.document %}&document={{ active_filters.document | urlencode }}{% endif %}{% if active_filters.domain %}&domain={{ active_filters.domain | urlencode }}{% endif %}{% if active_filters.meeting %}&meeting={{ active_filters.meeting | urlencode }}{% endif %}{% if active_filters.status %}&status={{ active_filters.status | urlencode }}{% endif %}"
+                       style="color: white; text-decoration: none; font-size: 16px; line-height: 1; margin-left: 4px;">×</a>
+                </span>
+                {% endif %}
+
+                {% if active_filters.category %}
+                <span style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #af52de; color: white; border-radius: 16px; font-size: 13px; font-weight: 500;">
+                    Category: {{ active_filters.category }}
+                    <a href="/timeline?date={{ date }}{% if active_filters.app %}&app={{ active_filters.app | urlencode }}{% endif %}{% if active_filters.project %}&project={{ active_filters.project | urlencode }}{% endif %}{% if active_filters.document %}&document={{ active_filters.document | urlencode }}{% endif %}{% if active_filters.domain %}&domain={{ active_filters.domain | urlencode }}{% endif %}{% if active_filters.meeting %}&meeting={{ active_filters.meeting | urlencode }}{% endif %}{% if active_filters.status %}&status={{ active_filters.status | urlencode }}{% endif %}"
+                       style="color: white; text-decoration: none; font-size: 16px; line-height: 1; margin-left: 4px;">×</a>
+                </span>
+                {% endif %}
+
+                {% if active_filters.project %}
+                <span style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #34c759; color: white; border-radius: 16px; font-size: 13px; font-weight: 500;">
+                    Project: {{ active_filters.project }}
+                    <a href="/timeline?date={{ date }}{% if active_filters.app %}&app={{ active_filters.app | urlencode }}{% endif %}{% if active_filters.category %}&category={{ active_filters.category | urlencode }}{% endif %}{% if active_filters.document %}&document={{ active_filters.document | urlencode }}{% endif %}{% if active_filters.domain %}&domain={{ active_filters.domain | urlencode }}{% endif %}{% if active_filters.meeting %}&meeting={{ active_filters.meeting | urlencode }}{% endif %}{% if active_filters.status %}&status={{ active_filters.status | urlencode }}{% endif %}"
+                       style="color: white; text-decoration: none; font-size: 16px; line-height: 1; margin-left: 4px;">×</a>
+                </span>
+                {% endif %}
+
+                {% if active_filters.document %}
+                <span style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #ff9500; color: white; border-radius: 16px; font-size: 13px; font-weight: 500;">
+                    Document: {{ active_filters.document }}
+                    <a href="/timeline?date={{ date }}{% if active_filters.app %}&app={{ active_filters.app | urlencode }}{% endif %}{% if active_filters.category %}&category={{ active_filters.category | urlencode }}{% endif %}{% if active_filters.project %}&project={{ active_filters.project | urlencode }}{% endif %}{% if active_filters.domain %}&domain={{ active_filters.domain | urlencode }}{% endif %}{% if active_filters.meeting %}&meeting={{ active_filters.meeting | urlencode }}{% endif %}{% if active_filters.status %}&status={{ active_filters.status | urlencode }}{% endif %}"
+                       style="color: white; text-decoration: none; font-size: 16px; line-height: 1; margin-left: 4px;">×</a>
+                </span>
+                {% endif %}
+
+                {% if active_filters.domain %}
+                <span style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #5856d6; color: white; border-radius: 16px; font-size: 13px; font-weight: 500;">
+                    Domain: {{ active_filters.domain }}
+                    <a href="/timeline?date={{ date }}{% if active_filters.app %}&app={{ active_filters.app | urlencode }}{% endif %}{% if active_filters.category %}&category={{ active_filters.category | urlencode }}{% endif %}{% if active_filters.project %}&project={{ active_filters.project | urlencode }}{% endif %}{% if active_filters.document %}&document={{ active_filters.document | urlencode }}{% endif %}{% if active_filters.meeting %}&meeting={{ active_filters.meeting | urlencode }}{% endif %}{% if active_filters.status %}&status={{ active_filters.status | urlencode }}{% endif %}"
+                       style="color: white; text-decoration: none; font-size: 16px; line-height: 1; margin-left: 4px;">×</a>
+                </span>
+                {% endif %}
+
+                {% if active_filters.meeting %}
+                <span style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #ff2d55; color: white; border-radius: 16px; font-size: 13px; font-weight: 500;">
+                    Meeting: {{ active_filters.meeting }}
+                    <a href="/timeline?date={{ date }}{% if active_filters.app %}&app={{ active_filters.app | urlencode }}{% endif %}{% if active_filters.category %}&category={{ active_filters.category | urlencode }}{% endif %}{% if active_filters.project %}&project={{ active_filters.project | urlencode }}{% endif %}{% if active_filters.document %}&document={{ active_filters.document | urlencode }}{% endif %}{% if active_filters.domain %}&domain={{ active_filters.domain | urlencode }}{% endif %}{% if active_filters.status %}&status={{ active_filters.status | urlencode }}{% endif %}"
+                       style="color: white; text-decoration: none; font-size: 16px; line-height: 1; margin-left: 4px;">×</a>
+                </span>
+                {% endif %}
+
+                {% if active_filters.status %}
+                <span style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #8e8e93; color: white; border-radius: 16px; font-size: 13px; font-weight: 500;">
+                    Status: {{ active_filters.status }}
+                    <a href="/timeline?date={{ date }}{% if active_filters.app %}&app={{ active_filters.app | urlencode }}{% endif %}{% if active_filters.category %}&category={{ active_filters.category | urlencode }}{% endif %}{% if active_filters.project %}&project={{ active_filters.project | urlencode }}{% endif %}{% if active_filters.document %}&document={{ active_filters.document | urlencode }}{% endif %}{% if active_filters.domain %}&domain={{ active_filters.domain | urlencode }}{% endif %}{% if active_filters.meeting %}&meeting={{ active_filters.meeting | urlencode }}{% endif %}"
+                       style="color: white; text-decoration: none; font-size: 16px; line-height: 1; margin-left: 4px;">×</a>
+                </span>
+                {% endif %}
+            </div>
+
+            <a href="/timeline?date={{ date }}"
+               style="font-size: 13px; font-weight: 500; color: #0071e3; text-decoration: none; white-space: nowrap;">
+                Clear all filters
+            </a>
+        </div>
+
+        <div style="margin-top: 12px; font-size: 13px; color: #86868b;">
+            Showing {{ total_activities }} activit{{ 'y' if total_activities == 1 else 'ies' }}
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Timeline -->
     <div class="card">
@@ -71,8 +155,17 @@
             </div>
             {% else %}
             <div class="text-center py-12 text-gray-500">
-                <p class="text-lg">No activity recorded for this date.</p>
-                <p class="text-sm mt-2">Select a different date or start tracking.</p>
+                {% if is_filtered %}
+                    <p class="text-lg font-medium">No activities match your filters</p>
+                    <p class="text-sm mt-2">Try adjusting or clearing your filters to see more results.</p>
+                    <a href="/timeline?date={{ date }}"
+                       style="display: inline-block; margin-top: 16px; padding: 10px 20px; background: #0071e3; color: white; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500;">
+                        Clear all filters
+                    </a>
+                {% else %}
+                    <p class="text-lg">No activity recorded for this date.</p>
+                    <p class="text-sm mt-2">Select a different date or start tracking.</p>
+                {% endif %}
             </div>
             {% endfor %}
         </div>

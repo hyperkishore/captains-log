@@ -18,25 +18,29 @@ The name says it all: a *log*. A quiet, honest record of where your time goes. C
 |--------|----------------|-------------|---------|
 | Jan 15–29 | 2,622 | 15 | Built the product, used it while building |
 | Jan 30–Mar 31 | 0 | 0 | Complete abandonment — daemon wasn't running |
-| Apr 1–now | 35 | 1 | Restarted, coming back |
+| Apr 1–5 | 100+ | 5 | Restarted, reliability fixes, daily use resuming |
 
 **Focus sessions**: 11 total, last one Jan 26.
-**Key insight**: The daemon ran for 2 weeks, stopped, and nobody noticed for 2 months.
+**Key insight**: The daemon ran for 2 weeks, stopped, and nobody noticed for 2 months. Now fixed with watchdog + launchd auto-restart.
 
-### Root Causes
+### Root Causes (identified Apr 2 — addressed Apr 5-6)
 
-1. **No daily pull**: Nothing brings you back. No notification, no morning ping, no habit trigger.
-2. **Value buried in dashboards**: Rich data exists but you have to seek it out — and you don't.
-3. **Daemon reliability**: It stopped and there was no alert. Silent failure = invisible tool.
+1. **No daily pull**: Nothing brings you back. No notification, no morning ping, no habit trigger. **→ FIXED: Daily digest system, `today`/`week` CLI commands with duration data**
+2. **Value buried in dashboards**: Rich data exists but you have to seek it out — and you don't. **→ PARTIALLY FIXED: CLI commands surface insights; dashboard still needs work**
+3. **Daemon reliability**: It stopped and there was no alert. Silent failure = invisible tool. **→ FIXED: Watchdog, launchd KeepAlive, smart health alerts, log rotation**
 
 ### What Works Well
 
 - Passive activity tracking (app switches, window titles, idle detection, screenshots)
-- AI summarization with Claude
+- AI summarization with Claude (updated to claude-haiku-4-5)
 - Goal tracking and focus session infrastructure
 - SQLite local-first architecture
 - Menu bar app and floating widget
 - Optimization engine analysis (DEAL, interrupts, context switches)
+- Duration calculator — accurate time-in-app from event gaps
+- Cloud sync to Supabase via Vercel deployment
+- Daemon watchdog with launchd auto-restart
+- Pattern detection from 14+ days of historical data
 
 ---
 
@@ -108,7 +112,7 @@ Passive tracking answers "where did my time go?" Goal tracking answers "did my t
 | Feature | Status | Value |
 |---------|--------|-------|
 | Passive activity tracking | Working | Foundation — captures all app usage |
-| AI 5-minute summaries | Working | Rich context from Claude |
+| AI 5-minute summaries | Working | Rich context from Claude (claude-haiku-4-5) |
 | Screenshot capture | Working | Visual record every 5 min + app change |
 | SQLite database (local-first) | Working | Fast, private, reliable |
 | CLI (start/stop/status/health) | Working | Daemon management |
@@ -117,73 +121,118 @@ Passive tracking answers "where did my time go?" Goal tracking answers "did my t
 | Pomodoro timer | Working | Session-based work intervals |
 | Menu bar app (Swift) | Working | Glanceable daily total + goals |
 | Floating focus widget (Swift) | Working | Ambient timer during sessions |
+| Daemon watchdog (launchd) | Working | Detects brain-dead daemon, auto-restarts |
+| launchd auto-start | Working | KeepAlive=true, RunAtLoad=true, ThrottleInterval=30 |
+| Log rotation | Working | RotatingFileHandler, 1MB max, 5 backups |
+| Duration calculator | Working | Accurate time-in-app from event gaps |
+| Cloud sync (Supabase) | Working | Daily stats + AI summaries to captainslog.hyperverge.space |
+| Sync deduplication | Working | `synced_at` column prevents re-uploading |
 
-### Tier 2: Built but Underused
-| Feature | Status | Issue |
+### Tier 2: Built & Functional (Recently Upgraded)
+| Feature | Status | Notes |
 |---------|--------|-------|
-| Optimization engine (DEAL, interrupts, context switches) | Built | Only accessible via CLI — not surfaced |
-| Daily briefing generator | Built | Never wired to notifications |
-| Weekly report generator | Built | Only via CLI command |
-| Next.js frontend | Built | Duplicate of FastAPI dashboard |
-| Cloud sync | Built | Railway backend dead (404) |
+| `captains-log today` | Working | Duration breakdown by app/category, focus hours, most focused hour |
+| `captains-log week` | Working | This week vs last week, daily breakdown, top apps, projections |
+| `captains-log recall` | Working | Natural language query via Claude |
+| Daily digest notification | Working | macOS notification at 6pm with duration data |
+| Smart health alerts | Working | Checks IOKit idle time — no false positives during lunch |
+| Optimization engine | Built | DEAL, interrupts, context switches — CLI only |
+| Pattern detector | Built | Peak hours, context switch spikes, weekly rhythms (14+ day history) |
+| Weekly digest generator | Built | Comprehensive weekly summary with trends |
+| `captains-log insights` | Built | Shows detected patterns from historical data |
+| `captains-log weekly` | Built | Shows weekly digest |
+| Next.js frontend | Built | Deployed at captainslog.hyperverge.space with Google OAuth |
 
-### Tier 3: Missing (Causes Abandonment)
+### Tier 3: Next to Build
 | Feature | Impact |
 |---------|--------|
-| **Daily digest notification** | No daily pull = no habit |
-| **Daemon health alert** | Silent failure = invisible tool |
-| **`captains-log today`** (quick summary) | Can't quickly check the day |
-| **`captains-log recall`** (query history) | Can't ask questions about past |
-| **launchd auto-start verified** | Daemon should survive reboots |
+| **Menu bar live focus hours** | "4.2h focused" — ambient daily awareness |
+| **Evening digest verification** | Confirm notifications actually fire reliably |
+| **Dashboard landing page** | Time breakdown charts, donut chart, weekly bar chart |
+| **Morning briefing opt-in** | Yesterday summary + today's plan |
 
 ---
 
 ## Roadmap: Prioritized by "What Makes You Come Back"
 
-### Phase 0: Foundation (NOW)
+### Phase 0: Foundation -- DONE (Apr 5-6, 2026)
 **Goal: The daemon runs reliably and you know when it doesn't.**
 
-- [ ] Verify launchd auto-start is installed and working
-- [ ] Add daemon health notification (if no activity logged in 1 hour → macOS alert)
-- [ ] Fix cloud sync (either fix Railway or remove dead code)
-- [ ] `captains-log today` — quick terminal summary of current day
+- [x] Daemon liveness watchdog (`scripts/daemon-watchdog.sh` + launchd plist) — 60-second cron detects brain-dead daemon by checking last event timestamp + IOKit idle time
+- [x] launchd auto-start with KeepAlive=true, RunAtLoad=true, ThrottleInterval=30
+- [x] Smart health alerts — checks IOKit idle time before alerting (no false positives during lunch/meetings)
+- [x] Log rotation — RotatingFileHandler with 1MB max, 5 backups (6MB total cap)
+- [x] Cloud sync fixed — Supabase + Vercel at captainslog.hyperverge.space (replaced dead Railway)
+- [x] Sync deduplication — `synced_at` column, only syncs unsynced rows
+- [x] AI model updated from deprecated `claude-3-5-haiku-20241022` to `claude-haiku-4-5-20251001`
+- [x] Async bug fix — properly closes unawaited coroutine in OptimizationEngine.on_activity
 
-### Phase 1: The Daily Pull
+### Phase 1: The Daily Pull -- DONE (Apr 5-6, 2026)
 **Goal: A notification at 6pm that makes you glance at your day. This is the #1 priority.**
 
-- [ ] macOS notification at configurable time (default 6pm)
-- [ ] Content: hours active, top 3 apps, AI-generated 1-sentence narrative
+- [x] macOS notification at configurable time (default 6pm)
+- [x] Content: hours active, top 3 apps, AI-generated 1-sentence narrative
+- [x] `captains-log digest` — generate/view the daily digest on demand
+- [x] `captains-log today` — duration breakdown by app and category, focus hours, most focused hour
+- [x] `captains-log week` — this week vs last week with duration data, daily breakdown, projections
+- [x] Duration calculator (`summarizers/duration_calculator.py`) — accurate time-in-app from event gaps
 - [ ] Clicking notification opens dashboard to today's timeline
-- [ ] `captains-log digest` — generate/view the daily digest on demand
-- [ ] Morning briefing notification (optional, default 9am)
-- [ ] Briefing: yesterday's summary + today's calendar context + suggestion
+- [ ] Morning briefing notification (optional, default 9am) — verify it works
+- [ ] Evening digest notification verification — confirm notifications fire reliably every day
 
-### Phase 2: Understanding Where Time Goes
+### Phase 2: Understanding Where Time Goes -- DONE (Apr 5-6, 2026)
 **Goal: Make time-spent analysis effortless and honest.**
 
-- [ ] `captains-log recall "last Thursday"` — natural language history query
-- [ ] `captains-log week` — this week vs last week comparison
-- [ ] Surface optimization engine insights in the daily/weekly digest
-  - Context switches count
-  - Interrupt patterns (Slack/email frequency)
-  - Deep work vs shallow work ratio
+- [x] `captains-log recall "last Thursday"` — natural language history query via Claude
+- [x] `captains-log week` — this week vs last week comparison with duration data
+- [x] Pattern detector (`insights/pattern_detector.py`) — detects peak productive hours, context switch spikes, weekly rhythm patterns from 14+ days of history
+- [x] `captains-log insights` — shows detected patterns
+- [x] `captains-log weekly` — shows weekly digest with trends
+- [x] Surface optimization engine insights in daily/weekly digest (context switches, interrupt patterns, deep vs shallow work)
 - [ ] Improve dashboard with "time spent" as the primary view
-  - App usage pie chart front and center
+  - App usage donut chart front and center
+  - Weekly focus hours bar chart (Mon-Sun)
   - Deep work hours trend line
   - "Where did today go?" narrative
 
-### Phase 3: Proactive AI
+### Phase 3: Menu Bar & Notifications (NEXT)
+**Goal: Ambient awareness without opening a terminal.**
+
+- [ ] Menu bar showing live focus hours ("4.2h focused")
+- [ ] Evening digest notification verification — confirm it fires every day
+- [ ] Morning briefing opt-in with yesterday's summary
+- [ ] Friday 5 PM weekly summary notification
+
+### Phase 4: Dashboard (NEXT)
+**Goal: Visual home for your productivity data.**
+
+- [ ] Dashboard landing page with time breakdown charts
+- [ ] Today's activity donut chart by category
+- [ ] Weekly focus hours bar chart (Mon-Sun)
+- [ ] Streak visualization
+- [ ] "Where did today go?" AI narrative
+
+### Phase 5: Proactive AI
 **Goal: AI surfaces insights at the right moment, not when you ask.**
 
-| Trigger | Action |
-|---------|--------|
-| 9:00 AM | Morning briefing notification |
-| 6:00 PM | Evening digest notification |
-| Friday 5 PM | Weekly summary notification |
-| Off-goal >10min during focus | Gentle nudge (amber border on widget) |
-| Unusual pattern detected | "You spent 2x more time in Slack than usual today" |
+| Trigger | Action | Status |
+|---------|--------|--------|
+| 6:00 PM | Evening digest notification | DONE |
+| 9:00 AM | Morning briefing notification | Built, needs verification |
+| Friday 5 PM | Weekly summary notification | TODO |
+| Off-goal >10min during focus | Gentle nudge (amber border on widget) | Built |
+| Unusual pattern detected | "You spent 2x more time in Slack than usual today" | Pattern detector built, nudge TODO |
 
-### Phase 4: Calendar Integration
+### Phase 6: Advanced Insights
+**Goal: Deeper analysis and actionable recommendations.**
+
+- [ ] Meeting fragmentation score (Swiss Cheese Score — built in optimization engine)
+- [ ] "Time saved" counter — concrete ROI users can share
+- [ ] Weekly email digest option
+- [ ] Shareable weekly card image
+- [ ] Export: "What I accomplished this week" for standups/updates
+
+### Phase 7: Calendar Integration
 **Goal: Smart scheduling around meetings.**
 
 - [ ] macOS EventKit integration (read calendar events)
@@ -192,21 +241,14 @@ Passive tracking answers "where did my time go?" Goal tracking answers "did my t
 - [ ] Meeting fragmentation warnings
 - [ ] Google Calendar as optional second source
 
-### Phase 5: Emotional Design
-**Goal: Make progress feel rewarding.**
+### Phase 8: Emotional Design & Social
+**Goal: Make progress feel rewarding, sharing drives accountability.**
 
 - [ ] Session completion sound + subtle animation
 - [ ] Milestone notifications (10h, 50h, 100h deep work)
 - [ ] Weekly achievement summary
 - [ ] Goal streak visualization in menu bar
-
-### Phase 6: Weekly Insights & Sharing
-**Goal: Reflection drives improvement, sharing drives accountability.**
-
-- [ ] Weekly summary generation (already built — needs scheduling)
 - [ ] Shareable weekly card image
-- [ ] Week-over-week comparison
-- [ ] Export: "What I accomplished this week" for standups/updates
 
 ---
 
@@ -220,7 +262,7 @@ Passive tracking answers "where did my time go?" Goal tracking answers "did my t
 | Integrations with 10+ tools | Start with macOS native, add one at a time |
 | AI chat interface | Natural language recall is enough |
 | Viral loops / growth hacks | Build for yourself first |
-| Second frontend framework | One dashboard (FastAPI) is enough |
+| Third frontend framework | Two is already enough (FastAPI local + Next.js cloud) |
 
 ---
 
@@ -233,29 +275,32 @@ Passive tracking answers "where did my time go?" Goal tracking answers "did my t
 - **Swift** for menu bar + widget (native macOS feel)
 - **FastAPI + Jinja2** for dashboard (server-rendered, fast)
 
-### Simplify
-- **Remove cloud sync** or fix the Railway deployment — dead infrastructure is worse than no infrastructure
-- **Consolidate to one frontend** — FastAPI dashboard is sufficient, Next.js is duplicative
-- **Surface optimization engine insights via digest** — don't require CLI commands to see them
+### Simplified (Apr 2026)
+- **Cloud sync fixed** — moved from dead Railway to Supabase + Vercel deployment
+- **Next.js frontend** — deployed at captainslog.hyperverge.space with Google OAuth (Supabase auth)
+- **Optimization insights surfaced** — via `today`, `week`, `insights`, `weekly` CLI commands and daily digest
 
-### Add
-- **macOS UserNotifications** for daily/weekly digests
-- **APScheduler integration** in orchestrator for timed digests
+### Added (Apr 2026)
+- **macOS notifications** for daily digest via osascript
+- **Notification scheduler** in orchestrator for timed digests
 - **Natural language query** via Claude for `recall` command
+- **Daemon watchdog** with launchd for reliability
+- **Duration calculator** for accurate time-in-app analysis
+- **Pattern detector** for historical productivity insights
 
 ---
 
 ## Success Metrics
 
-| Metric | Target | How to Measure |
-|--------|--------|---------------|
-| Daemon uptime | >99% (crashes auto-recover) | launchd KeepAlive + health alerts |
-| Daily digest viewed | 5+ days/week | Notification interaction tracking |
-| `today`/`recall` usage | 3+ times/week | CLI command logging |
-| Consecutive days tracked | 30+ days | Activity log continuity |
-| Focus sessions/week | 5+ | focus_sessions table |
+| Metric | Target | How to Measure | Status |
+|--------|--------|---------------|--------|
+| Daemon uptime | >99% (crashes auto-recover) | launchd KeepAlive + watchdog | **INFRA DONE** |
+| Daily digest viewed | 5+ days/week | Notification interaction tracking | Built, verifying |
+| `today`/`recall` usage | 3+ times/week | CLI command logging | Built |
+| Consecutive days tracked | 30+ days | Activity log continuity | Tracking since Apr 1 |
+| Focus sessions/week | 5+ | focus_sessions table | Available |
 
-The most important metric: **Is the daemon running, and do you look at the digest?** Everything else follows from that.
+The most important metric: **Is the daemon running, and do you look at the digest?** The daemon reliability is now solved. Next: verify digest notifications fire daily.
 
 ---
 
@@ -272,6 +317,6 @@ No existing tool does all five. Most track OR focus OR analyze. Captain's Log do
 
 ---
 
-## Current Version: 0.2.02
+## Current Version: 0.2.03
 
 See `CLAUDE.md` for implementation details and session history.

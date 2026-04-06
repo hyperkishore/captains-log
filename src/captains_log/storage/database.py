@@ -17,7 +17,7 @@ import aiosqlite
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 # Database schema
 SCHEMA = """
@@ -862,6 +862,34 @@ class Database:
             """)
 
             logger.info("Migration v7 -> v8 complete")
+
+        # Migration from version 8 to 9: Add synced_at to summaries for deduplication
+        if from_version < 9:
+            logger.info("Running migration v8 -> v9: Adding synced_at to summaries")
+
+            # Get existing columns in summaries table
+            async with self._connection.execute("PRAGMA table_info(summaries)") as cursor:
+                existing_cols = {row[1] for row in await cursor.fetchall()}
+
+            if "synced_at" not in existing_cols:
+                try:
+                    await self._connection.execute(
+                        "ALTER TABLE summaries ADD COLUMN synced_at DATETIME"
+                    )
+                    logger.debug("Added column synced_at to summaries")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" not in str(e).lower():
+                        raise
+
+            # Create index for efficient unsynced queries
+            try:
+                await self._connection.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_summary_synced_at ON summaries(synced_at)"
+                )
+            except sqlite3.OperationalError:
+                pass
+
+            logger.info("Migration v8 -> v9 complete")
 
     async def close(self) -> None:
         """Close database connection."""

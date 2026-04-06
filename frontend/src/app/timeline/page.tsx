@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { Header } from '@/components/layout/Header';
 import { getTimeline, getScreenshots, getScreenshotUrl, analyzeScreenshotDeep, type WorkAnalysis } from '@/lib/api';
 import type { Activity, Screenshot } from '@/lib/types';
+import { sanitizeUrl } from '@/lib/security';
 import { Clock, Globe, Monitor, Image as ImageIcon, ExternalLink, Sparkles, Loader2, Code, FolderGit2, Brain, FileText } from 'lucide-react';
 
 export default function Timeline() {
@@ -137,11 +138,11 @@ export default function Timeline() {
                     {activity.window_title && (
                       <p className="text-sm text-slate-400 truncate">{activity.window_title}</p>
                     )}
-                    {activity.url && (
+                    {activity.url && sanitizeUrl(activity.url) && (
                       <div className="flex items-center gap-1 mt-1">
                         <Globe className="w-3 h-3 text-slate-500" />
                         <a
-                          href={activity.url}
+                          href={sanitizeUrl(activity.url)!}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-xs text-blue-400 hover:underline truncate"

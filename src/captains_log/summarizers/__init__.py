@@ -7,3 +7,6 @@ __all__ = [
     "FocusCalculator",
     "FiveMinuteSummarizer",
 ]
+
+# duration_calculator is imported directly where needed:
+# from captains_log.summarizers.duration_calculator import get_app_durations, ...

@@ -44,7 +44,7 @@ class SummarizationConfig(BaseModel):
     """AI summarization configuration."""
 
     enabled: bool = True
-    model: str = Field(default="claude-3-5-haiku-20241022")
+    model: str = Field(default="claude-haiku-4-5-20251001")
     use_batch_api: bool = Field(default=True, description="Use batch API for 50% cost savings")
     batch_interval_hours: int = Field(default=6, description="Process queue every N hours")
     vision_enabled: bool = True
@@ -71,7 +71,7 @@ class SyncConfig(BaseModel):
 
     enabled: bool = False
     cloud_api_url: str = Field(
-        default="https://generous-gentleness-production.up.railway.app",
+        default="https://captainslog.hyperverge.space",
         description="Cloud API URL for syncing"
     )
     sync_interval_minutes: int = Field(default=5, ge=1, le=60, description="Sync frequency")

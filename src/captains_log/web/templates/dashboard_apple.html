@@ -6,497 +6,585 @@
     <title>Captain's Log</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.65);
+            --border: rgba(51, 65, 85, 0.45);
+            --text: #f1f5f9;
+            --text-2: #cbd5e1;
+            --text-3: #94a3b8;
+            --text-4: #64748b;
+            --accent: #818cf8;
+            --green: #34d399;
+            --amber: #fbbf24;
+            --red: #f87171;
+            --sky: #38bdf8;
+            --orange: #fb923c;
+            --pink: #f472b6;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
-            background: linear-gradient(180deg, #f5f5f7 0%, #ffffff 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
-            color: #1d1d1f;
             -webkit-font-smoothing: antialiased;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 40px 24px;
+        /* === NAV === */
+        .nav {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 32px;
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(16px);
+            background: rgba(15, 23, 42, 0.85);
+            position: sticky; top: 0; z-index: 100;
         }
-
-        /* Header */
-        .header {
-            text-align: center;
-            margin-bottom: 48px;
+        .nav-brand { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+        .nav-links { display: flex; gap: 4px; }
+        .nav-links a {
+            color: var(--text-3); text-decoration: none; font-size: 13px; font-weight: 500;
+            padding: 6px 14px; border-radius: 8px; transition: all 0.15s;
         }
-
-        .header h1 {
-            font-size: 48px;
-            font-weight: 600;
-            letter-spacing: -0.5px;
-            margin-bottom: 8px;
-        }
-
-        .header .subtitle {
-            font-size: 21px;
-            color: #86868b;
-            font-weight: 400;
-        }
-
-        .header .date {
-            font-size: 17px;
-            color: #86868b;
-            margin-top: 16px;
-        }
-
-        /* Summary Cards */
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
-            margin-bottom: 48px;
-        }
-
-        .summary-card {
-            background: #ffffff;
-            border-radius: 20px;
-            padding: 24px;
-            text-align: center;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .summary-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-        }
-
-        .summary-card .value {
-            font-size: 44px;
-            font-weight: 600;
-            letter-spacing: -1px;
-        }
-
-        .summary-card .label {
-            font-size: 14px;
-            color: #86868b;
-            margin-top: 4px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .summary-card.primary .value { color: #0071e3; }
-        .summary-card.success .value { color: #34c759; }
-        .summary-card.warning .value { color: #ff9500; }
-        .summary-card.purple .value { color: #af52de; }
-
-        /* Work Activity Section */
-        .section {
-            background: #ffffff;
-            border-radius: 20px;
-            padding: 32px;
-            margin-bottom: 32px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-        }
-
-        .section-title {
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 24px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .section-title .icon {
-            font-size: 28px;
-        }
-
-        /* Work Categories */
-        .work-categories {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 24px;
-        }
-
-        .category-card {
-            background: #f5f5f7;
-            border-radius: 16px;
-            padding: 20px;
-        }
-
-        .category-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .category-name {
-            font-size: 17px;
-            font-weight: 600;
-        }
-
-        .category-time {
-            font-size: 17px;
-            font-weight: 500;
-            color: #0071e3;
-        }
-
-        .category-bar {
-            height: 8px;
-            background: #e5e5ea;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-bottom: 12px;
-        }
-
-        .category-bar-fill {
-            height: 100%;
-            border-radius: 4px;
-            transition: width 0.3s ease;
-        }
-
-        .category-items {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .category-item {
-            font-size: 13px;
-            color: #86868b;
-            background: #ffffff;
-            padding: 4px 10px;
-            border-radius: 8px;
-        }
-
-        /* Timeline */
-        .timeline {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .timeline-item {
-            display: grid;
-            grid-template-columns: 80px 1fr auto;
-            gap: 16px;
-            padding: 16px;
-            background: #f5f5f7;
-            border-radius: 12px;
-            align-items: center;
-        }
-
-        .timeline-time {
-            font-size: 15px;
-            font-weight: 500;
-            color: #86868b;
-        }
-
-        .timeline-content {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            overflow: hidden;
-        }
-
-        .timeline-app {
-            font-size: 15px;
-            font-weight: 600;
-        }
-
-        .timeline-detail {
-            font-size: 13px;
-            color: #86868b;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .timeline-duration {
-            font-size: 15px;
-            font-weight: 500;
-            color: #0071e3;
-            white-space: nowrap;
-        }
-
-        /* Insights */
-        .insights-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-        }
-
-        .insight-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 16px;
-            padding: 20px;
-            color: white;
-        }
-
-        .insight-card.green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-        .insight-card.orange { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-
-        .insight-label {
-            font-size: 13px;
-            opacity: 0.9;
-            margin-bottom: 4px;
-        }
-
-        .insight-value {
-            font-size: 28px;
-            font-weight: 600;
-        }
-
-        /* Charts */
-        .chart-container {
-            height: 200px;
-            position: relative;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .summary-grid { grid-template-columns: repeat(2, 1fr); }
-            .work-categories { grid-template-columns: 1fr; }
-            .insights-grid { grid-template-columns: 1fr; }
-        }
-
-        /* Live indicator */
-        .live-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 13px;
-            color: #34c759;
-            margin-top: 8px;
-        }
-
+        .nav-links a:hover, .nav-links a.active { color: var(--text); background: rgba(255,255,255,0.07); }
+        .nav-right { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 13px; font-weight: 500; }
         .live-dot {
-            width: 8px;
-            height: 8px;
-            background: #34c759;
-            border-radius: 50%;
+            width: 7px; height: 7px; background: var(--green); border-radius: 50%;
             animation: pulse 2s infinite;
         }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        /* === CONTAINER === */
+        .container { max-width: 1280px; margin: 0 auto; padding: 28px 32px 64px; }
+
+        /* === DATE NAV === */
+        .date-nav { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 28px; }
+        .date-arrow {
+            width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+            border-radius: 10px; border: 1px solid var(--border); color: var(--text-3);
+            text-decoration: none; font-size: 16px; transition: all 0.15s; cursor: pointer;
+        }
+        .date-arrow:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+        .date-arrow.disabled { opacity: 0.25; pointer-events: none; }
+        .date-center { text-align: center; }
+        .date-center h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+        .date-select {
+            background: transparent; border: none; color: var(--text-4);
+            font-size: 12px; font-family: inherit; margin-top: 4px; cursor: pointer; outline: none;
+        }
+        .date-select option { background: var(--bg); color: var(--text); }
+
+        /* === BENTO === */
+        .bento { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 16px; padding: 22px; backdrop-filter: blur(12px);
+            transition: border-color 0.2s;
+        }
+        .card:hover { border-color: rgba(100, 116, 139, 0.55); }
+        .span-2 { grid-column: span 2; }
+        .span-4 { grid-column: span 4; }
+
+        /* === HERO === */
+        .hero { display: flex; align-items: center; gap: 24px; }
+        .hero-ring { position: relative; width: 110px; height: 110px; flex-shrink: 0; }
+        .hero-ring svg { width: 100%; height: 100%; }
+        .hero-center {
+            position: absolute; inset: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+        .hero-num { font-size: 28px; font-weight: 800; letter-spacing: -1px; color: var(--accent); }
+        .hero-unit { font-size: 12px; color: var(--text-4); font-weight: 500; }
+        .hero-info h3 {
+            font-size: 11px; font-weight: 600; color: var(--text-4);
+            text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 4px;
+        }
+        .hero-title { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+        .hero-change { font-size: 13px; margin-top: 6px; font-weight: 500; }
+        .hero-change.up { color: var(--green); }
+        .hero-change.down { color: var(--red); }
+        .hero-change.flat { color: var(--text-4); }
+        .hero-sub { font-size: 12px; color: var(--text-4); margin-top: 3px; }
+
+        /* === METRIC === */
+        .metric { display: flex; flex-direction: column; justify-content: center; }
+        .metric-label {
+            font-size: 11px; font-weight: 600; color: var(--text-4);
+            text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;
+        }
+        .metric-val { font-size: 34px; font-weight: 700; letter-spacing: -1px; }
+        .metric-sub { font-size: 12px; color: var(--text-4); margin-top: 4px; }
+
+        /* === CHART === */
+        .chart-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+        .chart-title { font-size: 14px; font-weight: 600; }
+        .chart-badge {
+            font-size: 11px; color: var(--text-4); background: rgba(255,255,255,0.05);
+            padding: 3px 10px; border-radius: 6px;
+        }
+        .chart-wrap { position: relative; height: 170px; }
+
+        /* === CATEGORY BARS === */
+        .cat-list { display: flex; flex-direction: column; gap: 12px; }
+        .cat-row { display: flex; align-items: center; gap: 10px; }
+        .cat-name { font-size: 13px; font-weight: 500; width: 110px; color: var(--text-2); }
+        .cat-bar-bg { flex: 1; height: 7px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+        .cat-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+        .cat-val { font-size: 12px; font-weight: 600; width: 48px; text-align: right; color: var(--text-3); }
+
+        /* === APP BARS === */
+        .app-list { display: flex; flex-direction: column; gap: 9px; }
+        .app-row { display: flex; align-items: center; gap: 10px; }
+        .app-name {
+            font-size: 13px; font-weight: 500; width: 110px; color: var(--text-2);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .app-bar-bg { flex: 1; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+        .app-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.5s ease; }
+        .app-val { font-size: 11px; font-weight: 500; width: 42px; text-align: right; color: var(--text-4); }
+
+        /* === INSIGHT === */
+        .insight-card {
+            background: linear-gradient(135deg, rgba(129,140,248,0.1), rgba(56,189,248,0.06));
+            border-color: rgba(129,140,248,0.2);
+        }
+        .insight-icon { font-size: 20px; margin-bottom: 10px; }
+        .insight-text { font-size: 14px; line-height: 1.65; color: var(--text-2); }
+        .insight-empty { color: var(--text-4); font-style: italic; font-size: 13px; }
+
+        /* === HEATMAP === */
+        .heatmap { display: flex; gap: 3px; flex-wrap: wrap; }
+        .hm-cell {
+            width: 30px; height: 30px; border-radius: 5px;
+            background: rgba(255,255,255,0.04); display: block;
+            text-decoration: none; position: relative; transition: transform 0.1s;
+        }
+        .hm-cell:hover { transform: scale(1.15); }
+        .hm-cell[data-level="1"] { background: rgba(129,140,248,0.15); }
+        .hm-cell[data-level="2"] { background: rgba(129,140,248,0.3); }
+        .hm-cell[data-level="3"] { background: rgba(129,140,248,0.5); }
+        .hm-cell[data-level="4"] { background: rgba(129,140,248,0.78); }
+        .hm-cell:hover::after {
+            content: attr(title); position: absolute; bottom: calc(100% + 6px);
+            left: 50%; transform: translateX(-50%); background: #1e293b;
+            color: var(--text); font-size: 11px; padding: 3px 8px; border-radius: 5px;
+            white-space: nowrap; pointer-events: none; border: 1px solid var(--border);
+        }
+        .hm-legend { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
+        .hm-legend span { font-size: 11px; color: var(--text-4); }
+        .hm-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+        /* === CHRONO / DNA === */
+        .dna-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .dna-item { }
+        .dna-label { font-size: 10px; font-weight: 600; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px; }
+        .dna-value { font-size: 16px; font-weight: 700; color: var(--text-2); }
+        .dna-value .accent { color: var(--accent); }
+        .dna-value .green { color: var(--green); }
+        .dna-value .amber { color: var(--amber); }
+
+        /* === LAST SESSION === */
+        .ctx-app { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+        .ctx-detail { font-size: 13px; color: var(--text-3); line-height: 1.5; }
+        .ctx-meta { font-size: 12px; color: var(--text-4); margin-top: 8px; }
+
+        /* === BESTS === */
+        .bests-row { display: flex; gap: 16px; flex-wrap: wrap; }
+        .best-pill {
+            display: flex; align-items: center; gap: 6px;
+            background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+            border-radius: 8px; padding: 6px 12px; font-size: 12px; color: var(--text-3);
+        }
+        .best-pill .bp-val { font-weight: 700; color: var(--amber); }
+
+        /* === STREAK === */
+        .streak-card { display: flex; align-items: center; gap: 16px; }
+        .streak-fire { font-size: 32px; }
+        .streak-num { font-size: 38px; font-weight: 800; letter-spacing: -1px; color: var(--amber); }
+        .streak-label { font-size: 12px; color: var(--text-4); }
+        .vs-avg { font-size: 11px; font-weight: 500; margin-top: 2px; }
+        .vs-avg.up { color: var(--green); }
+        .vs-avg.down { color: var(--red); }
+        .vs-avg.flat { color: var(--text-4); }
+
+        /* === FEED === */
+        .feed { display: flex; flex-direction: column; gap: 1px; }
+        .feed-item {
+            display: grid; grid-template-columns: 50px 1fr auto; gap: 12px;
+            padding: 9px 10px; border-radius: 8px; align-items: center; transition: background 0.12s;
+        }
+        .feed-item:hover { background: rgba(255,255,255,0.03); }
+        .feed-time { font-size: 12px; color: var(--text-4); font-weight: 500; font-variant-numeric: tabular-nums; }
+        .feed-app { font-size: 13px; font-weight: 600; color: var(--text-2); }
+        .feed-detail { font-size: 11px; color: var(--text-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .feed-dur { font-size: 12px; font-weight: 500; color: var(--accent); text-align: right; }
+
+        /* === RESPONSIVE === */
+        @media (max-width: 900px) {
+            .bento { grid-template-columns: repeat(2, 1fr); }
+            .span-4 { grid-column: span 2; }
+            .container { padding: 16px; }
+            .nav { padding: 12px 16px; }
+        }
+        @media (max-width: 600px) {
+            .bento { grid-template-columns: 1fr; }
+            .span-2, .span-4 { grid-column: span 1; }
+            .nav-links { display: none; }
+            .hero { flex-direction: column; text-align: center; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <h1>Captain's Log</h1>
-            <p class="subtitle">Your work, understood.</p>
-            <p class="date">{{ today }}</p>
-            <div class="live-indicator">
-                <span class="live-dot"></span>
-                Tracking active
-            </div>
-        </header>
+    <!-- Nav -->
+    <nav class="nav">
+        <div class="nav-brand">Captain's Log</div>
+        <div class="nav-links">
+            <a href="/?date={{ date }}" class="active">Dashboard</a>
+            <a href="/time-analysis?date={{ date }}">Analysis</a>
+            <a href="/timeline?date={{ date }}">Timeline</a>
+            <a href="/apps">Apps</a>
+            <a href="/weekly?date={{ date }}">Weekly</a>
+        </div>
+        <div class="nav-right">
+            <span class="live-dot"></span>
+            <span id="clock"></span>
+        </div>
+    </nav>
 
-        <!-- Summary Cards -->
-        <div class="summary-grid">
-            <div class="summary-card primary">
-                <div class="value">{{ total_hours }}h</div>
-                <div class="label">Total Tracked</div>
+    <main class="container">
+        <!-- Date Navigation -->
+        <div class="date-nav">
+            {% if prev_date %}
+            <a href="/?date={{ prev_date }}" class="date-arrow">&larr;</a>
+            {% else %}
+            <span class="date-arrow disabled">&larr;</span>
+            {% endif %}
+            <div class="date-center">
+                <h2>{{ date_display }}</h2>
+                <select class="date-select" onchange="window.location='/?date='+this.value">
+                    {% for d in available_dates %}
+                    <option value="{{ d }}" {% if d == date %}selected{% endif %}>{{ d }}</option>
+                    {% endfor %}
+                </select>
             </div>
-            <div class="summary-card success">
-                <div class="value">{{ focus_score }}%</div>
-                <div class="label">Focus Score</div>
-            </div>
-            <div class="summary-card warning">
-                <div class="value">{{ context_switches }}</div>
-                <div class="label">Switches</div>
-            </div>
-            <div class="summary-card purple">
-                <div class="value">{{ deep_work_hours }}h</div>
-                <div class="label">Deep Work</div>
-            </div>
+            {% if next_date %}
+            <a href="/?date={{ next_date }}" class="date-arrow">&rarr;</a>
+            {% else %}
+            <span class="date-arrow disabled">&rarr;</span>
+            {% endif %}
         </div>
 
-        <!-- Work Categories -->
-        <section class="section">
-            <h2 class="section-title">
-                <span class="icon">📊</span>
-                Where Your Time Went
-            </h2>
-            <div class="work-categories">
-                {% for cat in work_categories %}
-                <div class="category-card">
-                    <div class="category-header">
-                        <span class="category-name">{{ cat.icon }} {{ cat.name }}</span>
-                        <span class="category-time">
-                            {% if cat.minutes >= 60 %}{{ (cat.minutes / 60)|round(1) }}h{% else %}{{ cat.minutes|round(0)|int }}m{% endif %}
-                        </span>
-                    </div>
-                    <div class="category-bar">
-                        <div class="category-bar-fill" style="width: {{ cat.percent }}%; background: {{ cat.color }};"></div>
-                    </div>
-                    <div class="category-items">
-                        {% for item in cat.top_items[:4] %}
-                        <span class="category-item">{{ item }}</span>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </section>
+        <!-- Bento Grid -->
+        <div class="bento">
 
-        <!-- Projects & Repos (Deep Work Context) -->
-        {% if project_work %}
-        <section class="section">
-            <h2 class="section-title">
-                <span class="icon">🛠️</span>
-                Projects & Repos
-            </h2>
-            <div class="timeline">
-                {% for project in project_work %}
-                <div class="timeline-item">
-                    <span class="timeline-time">Dev</span>
-                    <div class="timeline-content">
-                        <span class="timeline-app">{{ project.name }}</span>
-                        <span class="timeline-detail">Repository/Project</span>
+            <!-- Hero: Deep Work -->
+            <div class="card hero span-2">
+                <div class="hero-ring">
+                    <svg viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(129,140,248,0.1)" stroke-width="8"/>
+                        <circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="8"
+                                stroke-dasharray="{{ (326.7 * deep_work_percent / 100)|round(1) }} 326.7"
+                                stroke-linecap="round" transform="rotate(-90 60 60)"
+                                style="transition: stroke-dasharray 0.8s ease;"/>
+                    </svg>
+                    <div class="hero-center">
+                        <span class="hero-num">{{ deep_work_hours }}</span>
+                        <span class="hero-unit">/ {{ deep_work_target|round(0)|int }}h</span>
                     </div>
-                    <span class="timeline-duration">{{ project.time }}</span>
                 </div>
-                {% endfor %}
+                <div class="hero-info">
+                    <h3>Deep Work</h3>
+                    <div class="hero-title">{{ deep_work_hours }}h focused</div>
+                    {% if deep_work_change > 0 %}
+                    <div class="hero-change up">+{{ deep_work_change }}h vs yesterday</div>
+                    {% elif deep_work_change < 0 %}
+                    <div class="hero-change down">{{ deep_work_change }}h vs yesterday</div>
+                    {% else %}
+                    <div class="hero-change flat">Same as yesterday</div>
+                    {% endif %}
+                    {% if longest_stretch > 0 %}
+                    <div class="hero-sub">Longest stretch: {{ longest_stretch }}m in {{ longest_stretch_name }}</div>
+                    {% endif %}
+                </div>
             </div>
-        </section>
-        {% endif %}
 
-        <!-- Meetings Attended -->
-        {% if meetings %}
-        <section class="section">
-            <h2 class="section-title">
-                <span class="icon">📹</span>
-                Meetings Today
-            </h2>
-            <div class="timeline">
-                {% for meeting in meetings %}
-                <div class="timeline-item">
-                    <span class="timeline-time">Meeting</span>
-                    <div class="timeline-content">
-                        <span class="timeline-app">{{ meeting.name }}</span>
-                        <span class="timeline-detail">Video call</span>
+            <!-- Focus Score -->
+            <div class="card metric">
+                <div class="metric-label">Focus Score</div>
+                <div class="metric-val" style="color: {% if focus_score >= 70 %}var(--green){% elif focus_score >= 40 %}var(--amber){% else %}var(--red){% endif %}">{{ focus_score }}%</div>
+                <div class="metric-sub">{{ category_switches }} category switches</div>
+            </div>
+
+            <!-- Streak -->
+            <div class="card streak-card">
+                <div>
+                    <span class="streak-fire">&#128293;</span>
+                </div>
+                <div>
+                    <div class="streak-num">{{ streak }}</div>
+                    <div class="streak-label">day streak</div>
+                </div>
+                <div style="margin-left: auto; text-align: right;">
+                    <div style="font-size: 20px; font-weight: 700; color: var(--sky);">{{ total_hours }}h</div>
+                    <div class="metric-sub">tracked</div>
+                    {% if total_hours > avg_total_hours * 1.05 %}
+                    <div class="vs-avg up">+{{ (total_hours - avg_total_hours)|round(1) }}h vs avg</div>
+                    {% elif total_hours < avg_total_hours * 0.95 %}
+                    <div class="vs-avg down">{{ (total_hours - avg_total_hours)|round(1) }}h vs avg</div>
+                    {% else %}
+                    <div class="vs-avg flat">~ avg</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Hourly Focus Rhythm -->
+            <div class="card span-4">
+                <div class="chart-hdr">
+                    <span class="chart-title">Focus Rhythm</span>
+                    <span class="chart-badge">Minutes per hour</span>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="hourlyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Where Time Went -->
+            <div class="card span-2">
+                <div class="chart-hdr">
+                    <span class="chart-title">Where Time Went</span>
+                </div>
+                {% if categories %}
+                <div class="cat-list">
+                    {% set cat_colors = {"Development": "var(--accent)", "Communication": "var(--orange)", "Browsing": "var(--sky)", "Productivity": "var(--green)", "Media": "var(--pink)"} %}
+                    {% for cat in categories %}
+                    <div class="cat-row">
+                        <span class="cat-name">{{ cat.name }}</span>
+                        <div class="cat-bar-bg">
+                            <div class="cat-bar-fill" style="width: {{ cat.percent }}%; background: {{ cat_colors.get(cat.name, 'var(--text-4)') }};"></div>
+                        </div>
+                        <span class="cat-val">{% if cat.minutes >= 60 %}{{ (cat.minutes / 60)|round(1) }}h{% else %}{{ cat.minutes|int }}m{% endif %}</span>
                     </div>
-                    <span class="timeline-duration">{{ meeting.time }}</span>
+                    {% endfor %}
                 </div>
-                {% endfor %}
+                {% else %}
+                <p style="color: var(--text-4); font-size: 13px;">No activity data</p>
+                {% endif %}
             </div>
-        </section>
-        {% endif %}
 
-        <!-- Documents Worked On -->
-        {% if documents %}
-        <section class="section">
-            <h2 class="section-title">
-                <span class="icon">📄</span>
-                Documents & Files
-            </h2>
-            <div class="timeline">
-                {% for doc in documents %}
-                <div class="timeline-item">
-                    <span class="timeline-time">Doc</span>
-                    <div class="timeline-content">
-                        <span class="timeline-app">{{ doc.name }}</span>
-                        <span class="timeline-detail">Document</span>
+            <!-- Weekly Trend -->
+            <div class="card span-2">
+                <div class="chart-hdr">
+                    <span class="chart-title">Weekly Trend</span>
+                    <span class="chart-badge">Deep work hours</span>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="weeklyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Top Apps -->
+            <div class="card span-2">
+                <div class="chart-hdr">
+                    <span class="chart-title">Top Apps</span>
+                </div>
+                {% if top_apps %}
+                <div class="app-list">
+                    {% set max_app = top_apps[0].minutes if top_apps else 1 %}
+                    {% for app in top_apps %}
+                    <div class="app-row">
+                        <span class="app-name" title="{{ app.name }}">{{ app.name }}</span>
+                        <div class="app-bar-bg">
+                            <div class="app-bar-fill" style="width: {{ (app.minutes / max_app * 100)|round }}%"></div>
+                        </div>
+                        <span class="app-val">{% if app.minutes >= 60 %}{{ (app.minutes / 60)|round(1) }}h{% else %}{{ app.minutes|int }}m{% endif %}</span>
                     </div>
-                    <span class="timeline-duration">{{ doc.time }}</span>
+                    {% endfor %}
                 </div>
-                {% endfor %}
+                {% else %}
+                <p style="color: var(--text-4); font-size: 13px;">No app data</p>
+                {% endif %}
             </div>
-        </section>
-        {% endif %}
 
-        <!-- Engagement Metrics -->
-        <section class="section">
-            <h2 class="section-title">
-                <span class="icon">⌨️</span>
-                Engagement Metrics
-            </h2>
-            <div class="insights-grid">
-                <div class="insight-card">
-                    <div class="insight-label">Keystrokes</div>
-                    <div class="insight-value">{{ total_keystrokes|default(0) }}</div>
-                </div>
-                <div class="insight-card green">
-                    <div class="insight-label">Mouse Clicks</div>
-                    <div class="insight-value">{{ total_clicks|default(0) }}</div>
-                </div>
-                <div class="insight-card orange">
-                    <div class="insight-label">Engagement</div>
-                    <div class="insight-value">{{ engagement_rate|default(0) }}%</div>
-                </div>
+            <!-- AI Insight -->
+            <div class="card span-2 insight-card">
+                <div class="insight-icon">&#10024;</div>
+                <div class="chart-title" style="margin-bottom: 10px;">AI Insight</div>
+                {% if ai_insight %}
+                <p class="insight-text">{{ ai_insight }}</p>
+                {% else %}
+                <p class="insight-empty">No AI summaries for this date. Run the summarizer to generate insights.</p>
+                {% endif %}
             </div>
-        </section>
 
-        <!-- Key Insights -->
-        <section class="section">
-            <h2 class="section-title">
-                <span class="icon">💡</span>
-                Insights to Free Up 50% Time
-            </h2>
-            <div class="insights-grid">
-                {% for insight in insights %}
-                <div class="insight-card {{ insight.style }}">
-                    <div class="insight-label">{{ insight.label }}</div>
-                    <div class="insight-value">{{ insight.value }}</div>
+            <!-- Your Productivity DNA (Chronotype) -->
+            <div class="card span-2">
+                <div class="chart-hdr">
+                    <span class="chart-title">Your Productivity DNA</span>
+                    <span class="chart-badge">All-time patterns</span>
                 </div>
-                {% endfor %}
-            </div>
-        </section>
-
-        <!-- Recent Activity Timeline -->
-        <section class="section">
-            <h2 class="section-title">
-                <span class="icon">⏱️</span>
-                Recent Activity
-            </h2>
-            <div class="timeline">
-                {% for activity in recent_activities %}
-                <div class="timeline-item">
-                    <span class="timeline-time">{{ activity.time }}</span>
-                    <div class="timeline-content">
-                        <span class="timeline-app">{{ activity.app }}</span>
-                        <span class="timeline-detail">{{ activity.detail }}</span>
+                <div class="dna-grid">
+                    <div class="dna-item">
+                        <div class="dna-label">Peak Focus</div>
+                        <div class="dna-value"><span class="accent">{{ chronotype.peak_start }} - {{ chronotype.peak_end }}</span></div>
                     </div>
-                    <span class="timeline-duration">{{ activity.duration }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </section>
-
-        <!-- URL Activity (Browser Work) -->
-        {% if browser_work %}
-        <section class="section">
-            <h2 class="section-title">
-                <span class="icon">🌐</span>
-                Browser Activity by Domain
-            </h2>
-            <div class="timeline">
-                {% for domain in browser_work %}
-                <div class="timeline-item">
-                    <span class="timeline-time">{{ domain.category }}</span>
-                    <div class="timeline-content">
-                        <span class="timeline-app">{{ domain.domain }}</span>
-                        <span class="timeline-detail">{{ domain.visits }} visits</span>
+                    <div class="dna-item">
+                        <div class="dna-label">Low Energy</div>
+                        <div class="dna-value">{% if chronotype.valley_str %}<span class="amber">{{ chronotype.valley_str }}</span>{% else %}<span style="color:var(--text-4)">—</span>{% endif %}</div>
                     </div>
-                    <span class="timeline-duration">{{ domain.time }}</span>
+                    <div class="dna-item">
+                        <div class="dna-label">Best Day</div>
+                        <div class="dna-value"><span class="green">{{ chronotype.best_day }}</span> <span style="font-size:12px;color:var(--text-4)">({{ chronotype.best_day_hours }}h avg)</span></div>
+                    </div>
+                    <div class="dna-item">
+                        <div class="dna-label">Daily Capacity</div>
+                        <div class="dna-value">{{ chronotype.avg_daily_capacity }}h <span style="font-size:12px;color:var(--text-4)">average</span></div>
+                    </div>
                 </div>
-                {% endfor %}
             </div>
-        </section>
-        {% endif %}
-    </div>
+
+            <!-- Last Session (Context Recovery) -->
+            <div class="card span-2">
+                <div class="chart-hdr">
+                    <span class="chart-title">Last Session</span>
+                    <span class="chart-badge">Context recovery</span>
+                </div>
+                {% if last_session %}
+                <div class="ctx-app">{{ last_session.app }}</div>
+                <div class="ctx-detail">{{ last_session.detail }}</div>
+                <div class="ctx-meta">{{ last_session.date }} at {{ last_session.time }}</div>
+                {% else %}
+                <p style="color: var(--text-4); font-size: 13px;">No previous session found</p>
+                {% endif %}
+                <div style="margin-top: 14px;">
+                    <div class="chart-title" style="font-size: 12px; margin-bottom: 8px;">Records</div>
+                    <div class="bests-row">
+                        <div class="best-pill">Most Active Day: <span class="bp-val">{{ personal_bests.most_active_hours }}h</span></div>
+                        <div class="best-pill">Days Tracked: <span class="bp-val">{{ personal_bests.total_days }}</span></div>
+                        <div class="best-pill">All-Time Hours: <span class="bp-val">{{ personal_bests.total_hours_all_time|int }}</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 30-Day Activity Heatmap -->
+            <div class="card span-4">
+                <div class="chart-hdr">
+                    <span class="chart-title">30-Day Activity</span>
+                </div>
+                <div class="heatmap">
+                    {% for cell in heatmap_dates %}
+                    <a href="/?date={{ cell.date }}" class="hm-cell" data-level="{{ cell.level }}" title="{{ cell.date }}"></a>
+                    {% endfor %}
+                </div>
+                <div class="hm-legend">
+                    <span>Less</span>
+                    <span class="hm-swatch" style="background:rgba(255,255,255,0.04)"></span>
+                    <span class="hm-swatch" style="background:rgba(129,140,248,0.15)"></span>
+                    <span class="hm-swatch" style="background:rgba(129,140,248,0.3)"></span>
+                    <span class="hm-swatch" style="background:rgba(129,140,248,0.5)"></span>
+                    <span class="hm-swatch" style="background:rgba(129,140,248,0.78)"></span>
+                    <span>More</span>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="card span-4">
+                <div class="chart-hdr">
+                    <span class="chart-title">Recent Activity</span>
+                    <a href="/timeline?date={{ date }}" class="chart-badge" style="text-decoration:none;color:var(--accent);">View timeline &rarr;</a>
+                </div>
+                {% if recent_activities %}
+                <div class="feed">
+                    {% for act in recent_activities %}
+                    <div class="feed-item">
+                        <span class="feed-time">{{ act.time }}</span>
+                        <div style="min-width:0;">
+                            <div class="feed-app">{{ act.app }}</div>
+                            <div class="feed-detail">{{ act.detail }}</div>
+                        </div>
+                        <span class="feed-dur">{{ act.duration }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p style="color: var(--text-4); font-size: 13px;">No activity recorded</p>
+                {% endif %}
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // Clock
+        function updateClock() {
+            const el = document.getElementById('clock');
+            if (el) el.textContent = new Date().toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        // Chart.js dark mode defaults
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.borderColor = 'rgba(51,65,85,0.25)';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+
+        // Hourly Focus
+        const hourly = {{ hourly_focus | tojson }};
+        new Chart(document.getElementById('hourlyChart'), {
+            type: 'bar',
+            data: {
+                labels: Array.from({length:24}, (_,i) => String(i).padStart(2,'0')),
+                datasets: [{
+                    data: hourly,
+                    backgroundColor: hourly.map(v => v > 30 ? 'rgba(129,140,248,0.85)' : v > 10 ? 'rgba(129,140,248,0.5)' : 'rgba(129,140,248,0.18)'),
+                    borderRadius: 4, borderSkipped: false, barPercentage: 0.7,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: {display:false}, tooltip: { callbacks: { label: c => c.raw.toFixed(0) + ' min' }}},
+                scales: { y: {display:false}, x: { grid: {display:false}, ticks: {font:{size:10}} } }
+            }
+        });
+
+        // Keyboard navigation: left/right arrows to change date
+        document.addEventListener('keydown', function(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+            {% if prev_date %}
+            if (e.key === 'ArrowLeft') { window.location = '/?date={{ prev_date }}'; e.preventDefault(); }
+            {% endif %}
+            {% if next_date %}
+            if (e.key === 'ArrowRight') { window.location = '/?date={{ next_date }}'; e.preventDefault(); }
+            {% endif %}
+        });
+
+        // Weekly Trend
+        const weekly = {{ weekly_trend | tojson }};
+        new Chart(document.getElementById('weeklyChart'), {
+            type: 'bar',
+            data: {
+                labels: weekly.map(d => d.day),
+                datasets: [
+                    { label: 'Deep Work', data: weekly.map(d => d.deep_work), backgroundColor: 'rgba(129,140,248,0.75)', borderRadius: 5, borderSkipped: false },
+                    { label: 'Total', data: weekly.map(d => d.total), backgroundColor: 'rgba(100,116,139,0.2)', borderRadius: 5, borderSkipped: false },
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { position:'bottom', labels: {boxWidth:10, padding:14, font:{size:11}} },
+                    tooltip: { callbacks: { label: c => c.dataset.label + ': ' + c.raw + 'h' }}
+                },
+                scales: {
+                    y: { grid: {color:'rgba(51,65,85,0.18)'}, ticks: {font:{size:10}, callback: v => v+'h'} },
+                    x: { grid: {display:false}, ticks: {font:{size:11}} }
+                }
+            }
+        });
+    </script>
 </body>
 </html>

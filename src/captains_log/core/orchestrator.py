@@ -502,17 +502,19 @@ class Orchestrator:
 
             # Feed to optimization engine for interrupt/context switch analysis
             if self.optimization_engine:
+                coro = self.optimization_engine.on_activity(
+                    timestamp=app_info.timestamp,
+                    app_name=app_info.app_name,
+                    bundle_id=app_info.bundle_id,
+                    window_title=window_title,
+                    work_category=work_context.category if work_context else None,
+                )
                 try:
-                    asyncio.create_task(
-                        self.optimization_engine.on_activity(
-                            timestamp=app_info.timestamp,
-                            app_name=app_info.app_name,
-                            bundle_id=app_info.bundle_id,
-                            window_title=window_title,
-                            work_category=work_context.category if work_context else None,
-                        )
-                    )
+                    task = asyncio.create_task(coro)
+                    self._tasks.append(task)
+                    task.add_done_callback(lambda t: self._tasks.remove(t) if t in self._tasks else None)
                 except Exception as e:
+                    coro.close()
                     logger.debug(f"Optimization tracking error: {e}")
 
             # Log with work context info

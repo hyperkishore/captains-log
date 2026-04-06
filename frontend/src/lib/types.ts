@@ -1,7 +1,7 @@
 // API Response Types for Captain's Log
 
 export interface Activity {
-  id: number;
+  id?: number;  // Optional - backend doesn't always return this
   timestamp: string;
   app_name: string;
   bundle_id: string | null;
