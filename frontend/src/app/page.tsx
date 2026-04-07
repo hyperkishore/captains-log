@@ -165,10 +165,10 @@ export default function Dashboard() {
   }, [dateStr]);
 
   // Calculate metrics
-  const totalHours = stats ? (stats.total_events * 0.5 / 60).toFixed(1) : '0';
-  const focusScore = insights?.metrics?.deep_work_minutes
-    ? Math.min(100, Math.round(insights.metrics.deep_work_minutes / 60 * 25))
-    : 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const trackedMinutes = (stats as any)?.tracked_minutes as number | undefined;
+  const totalHours = trackedMinutes ? (trackedMinutes / 60).toFixed(1) : stats ? (stats.total_events * 2 / 60).toFixed(1) : '0';
+  const focusScore = insights?.metrics?.focus_score || 0;
   const deepWorkHours = insights?.metrics?.deep_work_minutes
     ? (insights.metrics.deep_work_minutes / 60).toFixed(1)
     : '0';

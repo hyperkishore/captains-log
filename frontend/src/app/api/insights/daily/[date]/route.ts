@@ -113,8 +113,8 @@ export async function GET(
       Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0] ||
       "Unknown";
 
-    // Calculate productive hours
-    const productiveHours = Math.round((totalEvents * 0.5) / 60 * 10) / 10;
+    // Calculate productive hours: each event ~2 min of activity
+    const productiveHours = Math.round((totalEvents * 2) / 60 * 10) / 10;
 
     // Build narrative from summaries
     const contexts = summaries

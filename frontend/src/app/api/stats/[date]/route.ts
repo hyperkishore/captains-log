@@ -13,7 +13,7 @@ export async function GET(
 
     let query = supabase
       .from("daily_stats")
-      .select("date, total_events, unique_apps, top_apps, hourly_breakdown")
+      .select("date, total_events, unique_apps, top_apps, hourly_breakdown, time_blocks, categories")
       .eq("date", date);
 
     if (deviceId) {
@@ -33,12 +33,22 @@ export async function GET(
       throw error;
     }
 
+    // Calculate tracked minutes from time_blocks (sum of all category counts * 5 min per block)
+    // Each time_block.total represents event count in that hour, use as proxy for active minutes
+    const timeBlocks = data.time_blocks || [];
+    const categories = data.categories || {};
+
+    // Estimate tracked hours: each event represents ~2 min of activity (avg time between switches)
+    const trackedMinutes = Math.round(data.total_events * 2);
+
     return NextResponse.json({
       date: data.date,
       total_events: data.total_events || 0,
       unique_apps: data.unique_apps || 0,
       top_apps: data.top_apps || [],
       hourly_breakdown: data.hourly_breakdown || [],
+      tracked_minutes: trackedMinutes,
+      categories,
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error";

@@ -28,7 +28,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Sidebar />
-          <main className="pl-64 min-h-screen">
+          <main className="pl-64 h-screen overflow-y-auto">
             {children}
           </main>
         </ThemeProvider>
