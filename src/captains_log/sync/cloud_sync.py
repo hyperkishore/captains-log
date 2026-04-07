@@ -331,8 +331,8 @@ class CloudSync:
 
     async def _sync_activities(self, session: aiohttp.ClientSession) -> int:
         """Sync raw activities to cloud (optional, more data)."""
-        # Get activities from last sync or last hour
-        since = self._last_sync or (datetime.utcnow() - timedelta(hours=1))
+        # Get activities from today (sync the full day each time)
+        since = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
         async with aiosqlite.connect(self.config.db_path) as db:
             db.row_factory = aiosqlite.Row
@@ -356,7 +356,6 @@ class CloudSync:
                         "url": row["url"],
                         "idle_seconds": row["idle_seconds"],
                         "idle_status": row["idle_status"],
-                        "work_category": row.get("work_category"),
                     })
 
         if not activities:

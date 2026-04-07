@@ -75,7 +75,7 @@ class SyncConfig(BaseModel):
         description="Cloud API URL for syncing"
     )
     sync_interval_minutes: int = Field(default=5, ge=1, le=60, description="Sync frequency")
-    sync_activities: bool = Field(default=False, description="Sync raw activities (more data)")
+    sync_activities: bool = Field(default=True, description="Sync raw activities (more data)")
     sync_stats: bool = Field(default=True, description="Sync daily aggregated stats")
     sync_summaries: bool = Field(default=True, description="Sync AI summaries")
 
