@@ -254,6 +254,11 @@ def status() -> None:
     table.add_row("CPU", f"{cpu_percent:.1f}%")
     table.add_row("Database", str(config.db_path))
     table.add_row("Logs", str(config.log_dir / "daemon.log"))
+    table.add_row("Device ID", config.device_id)
+    if config.sync.user_email:
+        table.add_row("Linked to", f"[green]{config.sync.user_email}[/green]")
+    else:
+        table.add_row("Linked to", "[yellow]Not linked[/yellow] (run: captains-log link <email>)")
 
     console.print(Panel(table, title="Captain's Log Status", border_style="green"))
 
@@ -2649,6 +2654,62 @@ async def _build_recall_context(db: Any, query: str) -> str:
             )
 
     return "\n".join(context_parts)
+
+
+@app.command()
+def link(
+    email: str = typer.Argument(..., help="Your @hyperverge.co email"),
+) -> None:
+    """Link this device to your account for cloud dashboard access."""
+    import re
+
+    if not re.match(r"^[^@]+@hyperverge\.co$", email):
+        console.print("[red]Error:[/red] Email must end with @hyperverge.co")
+        raise typer.Exit(1)
+
+    config = get_config()
+
+    # Read existing config.yaml, update sync.user_email, write back
+    config_path = config.config_file
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    import yaml
+
+    yaml_config: dict = {}
+    if config_path.exists():
+        with open(config_path) as f:
+            yaml_config = yaml.safe_load(f) or {}
+
+    if "sync" not in yaml_config:
+        yaml_config["sync"] = {}
+    yaml_config["sync"]["user_email"] = email
+
+    with open(config_path, "w") as f:
+        yaml.dump(yaml_config, f, default_flow_style=False, sort_keys=False)
+
+    os.chmod(config_path, 0o600)
+
+    console.print(f"[green]Device linked to {email}[/green]")
+    console.print(f"Device ID: {config.device_id}")
+    console.print(f"Your data will appear at [cyan]captainslog.hyperverge.space[/cyan]")
+
+    # Trigger device re-registration with cloud
+    if config.sync.enabled:
+        console.print("\nRe-registering device with cloud...")
+        try:
+            # Update the in-memory config
+            config.sync.user_email = email
+
+            from captains_log.sync.cloud_sync import CloudSync
+
+            sync = CloudSync(config)
+            asyncio.run(sync._register_device())
+            console.print("[green]Device re-registered successfully.[/green]")
+        except Exception as e:
+            console.print(f"[yellow]Warning:[/yellow] Could not re-register device: {e}")
+            console.print("The daemon will re-register on next restart.")
+    else:
+        console.print("\n[yellow]Note:[/yellow] Cloud sync is disabled. Enable it in config.yaml to sync data.")
 
 
 @app.callback()

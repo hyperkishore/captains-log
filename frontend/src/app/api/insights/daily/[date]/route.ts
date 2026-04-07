@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase-server";
+import { getUserDeviceIds } from "@/lib/supabase-auth";
 
 interface TimeBlock {
   hour: number;
@@ -27,6 +28,24 @@ export async function GET(
     const { date } = await params;
     const deviceId = request.nextUrl.searchParams.get("device");
 
+    // Resolve device filter
+    let deviceIds: string[] | null = null;
+    if (!deviceId) {
+      deviceIds = await getUserDeviceIds();
+      if (!deviceIds) {
+        return NextResponse.json(
+          { error: "Authentication required" },
+          { status: 401 }
+        );
+      }
+      if (deviceIds.length === 0) {
+        return NextResponse.json(
+          { error: "No devices linked to your account" },
+          { status: 404 }
+        );
+      }
+    }
+
     const supabase = getServiceSupabase();
 
     // Fetch daily_stats
@@ -39,6 +58,8 @@ export async function GET(
 
     if (deviceId) {
       statsQuery = statsQuery.eq("device_id", deviceId);
+    } else {
+      statsQuery = statsQuery.in("device_id", deviceIds!);
     }
 
     const { data: statsData } = await statsQuery.limit(1).single();
@@ -57,6 +78,8 @@ export async function GET(
 
     if (deviceId) {
       summariesQuery = summariesQuery.eq("device_id", deviceId);
+    } else {
+      summariesQuery = summariesQuery.in("device_id", deviceIds!);
     }
 
     const { data: summariesData } = await summariesQuery;

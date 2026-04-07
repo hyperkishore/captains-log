@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -78,6 +79,7 @@ class SyncConfig(BaseModel):
     sync_activities: bool = Field(default=True, description="Sync raw activities (more data)")
     sync_stats: bool = Field(default=True, description="Sync daily aggregated stats")
     sync_summaries: bool = Field(default=True, description="Sync AI summaries")
+    user_email: str = Field(default="", description="User email for multi-tenant device linking")
 
 
 class FocusConfig(BaseModel):
@@ -266,7 +268,13 @@ class Config(BaseSettings):
                 yaml_config = yaml.safe_load(f) or {}
 
         # Create config with YAML as init data, env vars will override
-        return cls(**yaml_config)
+        config = cls(**yaml_config)
+
+        # Auto-detect user email if not configured
+        if not config.sync.user_email:
+            config.sync.user_email = _auto_detect_email()
+
+        return config
 
     def save(self, config_path: Path | None = None) -> None:
         """Save current configuration to YAML file."""
@@ -289,6 +297,35 @@ class Config(BaseSettings):
 
         # Set restrictive permissions on config file
         os.chmod(config_path, 0o600)
+
+
+def _auto_detect_email() -> str:
+    """Auto-detect user email from environment or git config.
+
+    Priority:
+    1. CAPTAINS_LOG_USER_EMAIL environment variable
+    2. git config --global user.email
+    3. Empty string (device won't be linked until configured)
+    """
+    # Check environment variable first
+    env_email = os.environ.get("CAPTAINS_LOG_USER_EMAIL", "").strip()
+    if env_email:
+        return env_email
+
+    # Try git config
+    try:
+        result = subprocess.run(
+            ["git", "config", "--global", "user.email"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+
+    return ""
 
 
 @lru_cache

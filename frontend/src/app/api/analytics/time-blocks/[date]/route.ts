@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase-server";
+import { getUserDeviceIds } from "@/lib/supabase-auth";
 
 export async function GET(
   request: NextRequest,
@@ -18,6 +19,18 @@ export async function GET(
 
     if (deviceId) {
       query = query.eq("device_id", deviceId);
+    } else {
+      const deviceIds = await getUserDeviceIds();
+      if (!deviceIds) {
+        return NextResponse.json(
+          { error: "Authentication required" },
+          { status: 401 }
+        );
+      }
+      if (deviceIds.length === 0) {
+        return NextResponse.json([], { status: 200 });
+      }
+      query = query.in("device_id", deviceIds);
     }
 
     const { data, error } = await query.limit(1).single();

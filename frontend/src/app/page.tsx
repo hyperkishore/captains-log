@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Header } from '@/components/layout/Header';
 import { MetricCard } from '@/components/dashboard/MetricCard';
-import { getStats, getTimeBlocks, getPareto, getDailyInsights, getDeviceId, isCloudMode, getApiBase, API_VERSION } from '@/lib/api';
+import { getStats, getTimeBlocks, getPareto, getDailyInsights, getDeviceId, isCloudMode, getApiBase, API_VERSION, getMyDevices } from '@/lib/api';
 import type { DailyStats, TimeBlock, ParetoAnalysis, Insights } from '@/lib/types';
+import type { Device } from '@/lib/api';
 import { Activity, Clock, Zap, Target, Brain, AlertCircle, Cloud, Share2, Copy, Check } from 'lucide-react';
+import { DeviceSetup } from '@/components/device-setup';
 
 // Demo data for when API is unavailable
 const DEMO_STATS: DailyStats = {
@@ -90,10 +92,12 @@ export default function Dashboard() {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [cloudMode, setCloudMode] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [devicesLoaded, setDevicesLoaded] = useState(false);
 
   const dateStr = format(date, 'yyyy-MM-dd');
 
-  // Check cloud mode on mount
+  // Check cloud mode and fetch devices on mount
   useEffect(() => {
     const id = getDeviceId();
     setDeviceId(id);
@@ -104,6 +108,15 @@ export default function Dashboard() {
       console.log('[Captain\'s Log] Device ID:', id);
       console.log('[Captain\'s Log] Cloud Mode:', isCloudMode());
       console.log('[Captain\'s Log] API Base:', getApiBase());
+    }
+    // Fetch user's devices (only in deployed/cloud mode)
+    if (isCloudMode() || (!id && typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')) {
+      getMyDevices().then((devs) => {
+        setDevices(devs);
+        setDevicesLoaded(true);
+      });
+    } else {
+      setDevicesLoaded(true);
     }
   }, []);
 
@@ -183,7 +196,7 @@ export default function Dashboard() {
     Other: 'bg-slate-500',
   };
 
-  if (loading) {
+  if (loading || !devicesLoaded) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
         <Header title="Dashboard" date={date} onDateChange={setDate} />
@@ -192,6 +205,11 @@ export default function Dashboard() {
         </div>
       </div>
     );
+  }
+
+  // Show device setup if user is on deployed site with no linked devices
+  if (devicesLoaded && devices.length === 0 && !deviceId && typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return <DeviceSetup />;
   }
 
   return (

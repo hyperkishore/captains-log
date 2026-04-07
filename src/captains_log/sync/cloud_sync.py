@@ -1,7 +1,8 @@
-"""Cloud sync module for pushing data to Railway cloud API."""
+"""Cloud sync module for pushing data to cloud API."""
 
 import asyncio
 import logging
+import socket
 from datetime import datetime, date, timedelta
 from typing import Any
 
@@ -109,13 +110,19 @@ class CloudSync:
     async def _register_device(self) -> None:
         """Register device with cloud API."""
         try:
+            device_name = socket.gethostname()
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{self.api_url}/api/devices/register",
-                    json={"device_id": self.device_id, "name": None},
+                    json={
+                        "device_id": self.device_id,
+                        "name": device_name,
+                        "user_email": self.config.sync.user_email,
+                    },
                 ) as resp:
                     if resp.status == 200:
-                        logger.info("Device registered with cloud")
+                        email_info = f" (linked to {self.config.sync.user_email})" if self.config.sync.user_email else ""
+                        logger.info(f"Device registered with cloud{email_info}")
                     else:
                         logger.warning(f"Device registration failed: {resp.status}")
         except Exception as e:

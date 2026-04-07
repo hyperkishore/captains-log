@@ -5,9 +5,12 @@
 CREATE TABLE IF NOT EXISTS devices (
     id TEXT PRIMARY KEY,
     name TEXT,
+    user_email TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     last_sync TIMESTAMPTZ
 );
+
+CREATE INDEX IF NOT EXISTS idx_devices_user_email ON devices(user_email);
 
 -- Daily aggregated stats (main data source for dashboard)
 CREATE TABLE IF NOT EXISTS daily_stats (

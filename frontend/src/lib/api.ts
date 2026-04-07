@@ -345,6 +345,27 @@ export async function getAnalyticsOverview(date: string): Promise<{
   };
 }
 
+// Devices
+export interface Device {
+  id: string;
+  name: string | null;
+  last_sync: string | null;
+  created_at?: string;
+}
+
+export async function getMyDevices(): Promise<Device[]> {
+  try {
+    const res = await fetch('/api/devices/list');
+    if (res.status === 401) return [];
+    if (!res.ok) return [];
+    const data = await res.json();
+    // API returns { devices: [...] }
+    return data.devices || data || [];
+  } catch {
+    return [];
+  }
+}
+
 // Date helpers
 export function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];

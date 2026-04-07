@@ -3,19 +3,26 @@ import { getServiceSupabase } from "@/lib/supabase-server";
 
 export async function POST(request: NextRequest) {
   try {
-    const { device_id, name } = await request.json();
+    const { device_id, name, user_email } = await request.json();
     if (!device_id) {
       return NextResponse.json({ error: "device_id required" }, { status: 400 });
     }
 
     const supabase = getServiceSupabase();
 
+    const upsertData: Record<string, unknown> = {
+      id: device_id,
+      name: name || null,
+      last_sync: new Date().toISOString(),
+    };
+
+    if (user_email) {
+      upsertData.user_email = user_email;
+    }
+
     const { error } = await supabase
       .from("devices")
-      .upsert(
-        { id: device_id, name: name || null, last_sync: new Date().toISOString() },
-        { onConflict: "id" }
-      );
+      .upsert(upsertData, { onConflict: "id" });
 
     if (error) throw error;
 

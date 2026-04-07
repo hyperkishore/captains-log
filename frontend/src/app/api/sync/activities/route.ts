@@ -10,6 +10,21 @@ export async function POST(request: NextRequest) {
 
     const supabase = getServiceSupabase();
 
+    // Find the time range of incoming activities to delete existing dupes
+    const timestamps = activities.map((a: Record<string, unknown>) => a.timestamp as string).filter(Boolean);
+    if (timestamps.length > 0) {
+      const minTs = timestamps.reduce((a: string, b: string) => a < b ? a : b);
+      const maxTs = timestamps.reduce((a: string, b: string) => a > b ? a : b);
+
+      // Delete existing activities in this time range for this device (prevents dupes)
+      await supabase
+        .from("synced_activities")
+        .delete()
+        .eq("device_id", device_id)
+        .gte("timestamp", minTs)
+        .lte("timestamp", maxTs);
+    }
+
     // Insert activities in batch
     const rows = activities.map((a: Record<string, unknown>) => ({
       device_id,

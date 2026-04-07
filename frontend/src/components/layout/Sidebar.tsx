@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -11,8 +12,12 @@ import {
   Layers,
   TrendingUp,
   Lightbulb,
+  Settings,
+  Monitor,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { getMyDevices } from '@/lib/api';
+import type { Device } from '@/lib/api';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -24,10 +29,28 @@ const navigation = [
   { name: 'Deep Dive', href: '/analytics/deep-dive', icon: Layers },
   { name: 'Trends', href: '/analytics/trends', icon: TrendingUp },
   { name: 'Insights', href: '/analytics/insights', icon: Lightbulb },
+  { type: 'divider', label: 'Account' },
+  { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [devicesLoaded, setDevicesLoaded] = useState(false);
+
+  useEffect(() => {
+    // Only fetch devices on deployed site
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      getMyDevices().then((devs) => {
+        setDevices(devs);
+        setDevicesLoaded(true);
+      });
+    } else {
+      setDevicesLoaded(true);
+    }
+  }, []);
+
+  const primaryDevice = devices.length > 0 ? devices[0] : null;
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col">
@@ -72,6 +95,44 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* Device indicator */}
+      {devicesLoaded && (
+        <div className="px-4 pb-2">
+          {primaryDevice ? (
+            <Link
+              href="/settings"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
+            >
+              <div className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
+                  Connected
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-500 truncate">
+                  {primaryDevice.name || primaryDevice.id.slice(0, 12)}
+                </p>
+              </div>
+              <Monitor className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </Link>
+          ) : (
+            <Link
+              href="/settings"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <div className="w-2 h-2 rounded-full bg-slate-400 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                  No device
+                </p>
+              </div>
+              <span className="text-xs text-blue-500 dark:text-blue-400 flex-shrink-0">
+                Connect &rarr;
+              </span>
+            </Link>
+          )}
+        </div>
+      )}
 
       <div className="p-4 border-t border-slate-200 dark:border-slate-800">
         <ThemeToggle />
