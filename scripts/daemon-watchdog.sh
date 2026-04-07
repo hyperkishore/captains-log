@@ -93,8 +93,10 @@ fi
 NOW_EPOCH=$(date "+%s")
 EVENT_AGE=$((NOW_EPOCH - LAST_EPOCH))
 
-# If last event is too old and user is active, daemon is brain-dead
-if [ "$EVENT_AGE" -gt "$STALE_THRESHOLD" ]; then
+# Only consider brain-dead if daemon has been running longer than the stale threshold
+# AND last event is older than the stale threshold. This prevents false kills after
+# overnight restarts where the last event is hours old but the daemon just started.
+if [ "$EVENT_AGE" -gt "$STALE_THRESHOLD" ] && [ "${UPTIME:-9999}" -gt "$STALE_THRESHOLD" ]; then
     log "BRAIN-DEAD DETECTED: Last event ${EVENT_AGE}s ago, user idle ${IDLE_TIME}s, killing daemon PID $DAEMON_PID"
 
     kill "$DAEMON_PID"

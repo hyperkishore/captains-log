@@ -48,6 +48,7 @@ class NotificationScheduler:
         self._last_evening_date: str | None = None
         self._last_morning_date: str | None = None
         self._last_health_check: datetime | None = None
+        self._started_at: datetime = datetime.now()
 
     async def start(self) -> None:
         """Start the notification scheduler loop."""
@@ -173,6 +174,10 @@ class NotificationScheduler:
         """
         # Only check once per hour
         if self._last_health_check and (now - self._last_health_check).seconds < 3600:
+            return
+
+        # Don't alert within 10 minutes of daemon startup
+        if (now - self._started_at).total_seconds() < 600:
             return
 
         self._last_health_check = now
